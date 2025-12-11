@@ -161,7 +161,7 @@ export default function Home() {
   // Email config dialog
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [configAccountId, setConfigAccountId] = useState<string | null>(null);
-  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpHost, setSmtpHost] = useState("smtp.gmail.com");
   const [smtpPort, setSmtpPort] = useState("587");
   const [smtpUser, setSmtpUser] = useState("");
   const [smtpPassword, setSmtpPassword] = useState("");
@@ -667,7 +667,7 @@ export default function Home() {
 
   const openConfigDialog = (account: Account) => {
     setConfigAccountId(account.id);
-    setSmtpHost(account.emailConfig?.smtpHost || "");
+    setSmtpHost(account.emailConfig?.smtpHost || "smtp.gmail.com");
     setSmtpPort(account.emailConfig?.smtpPort?.toString() || "587");
     setSmtpUser(account.emailConfig?.smtpUser || account.email);
     setSmtpPassword(account.emailConfig?.smtpPassword || "");
