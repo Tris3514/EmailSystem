@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   let accountConfig: EmailAccount | undefined;
   try {
     const body = await request.json();
-    const { from, to, subject, text, html, accountConfig: config, conversationId } = body;
+    const { from, to, subject, text, html, accountConfig: config, conversationId, previousMessageId } = body;
     accountConfig = config;
 
     // Validate required fields
@@ -110,6 +110,23 @@ export async function POST(request: NextRequest) {
     // Verify connection
     await transporter.verify();
 
+    // Generate Message-ID for this email
+    // Format: <unique-id@domain>
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 15);
+    const messageId = `<${conversationId}-${timestamp}-${randomId}@${smtpHost.replace(/\./g, '-')}>`;
+
+    // Build headers for email threading
+    const headers: { [key: string]: string } = {
+      'Message-ID': messageId,
+    };
+
+    // If this is a reply (has previousMessageId), set threading headers
+    if (previousMessageId) {
+      headers['In-Reply-To'] = previousMessageId;
+      headers['References'] = previousMessageId;
+    }
+
     // Send email
     const info = await transporter.sendMail({
       from: `"${from.split('@')[0]}" <${accountConfig.email || smtpUser}>`,
@@ -117,11 +134,13 @@ export async function POST(request: NextRequest) {
       subject,
       text,
       html: html || text,
+      headers, // Add threading headers
     });
 
+    // Return the Message-ID we generated (or use the one from the server)
     return NextResponse.json({
       success: true,
-      messageId: info.messageId,
+      messageId: messageId, // Use our generated Message-ID for consistency
       message: "Email sent successfully",
     });
   } catch (error: any) {

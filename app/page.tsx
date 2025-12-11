@@ -27,6 +27,7 @@ interface Message {
   timestamp: Date;
   sent?: boolean;
   scheduledSendTime?: Date; // When this message is scheduled to be sent
+  emailMessageId?: string; // The Message-ID from the email server (for threading)
 }
 
 interface EmailConfig {
@@ -105,16 +106,17 @@ export default function Home() {
               maxDelayMinutes = delayMinutes;
             }
             
-            return {
-              ...conv,
-              minDelayMinutes,
-              maxDelayMinutes,
-              messages: conv.messages.map((msg: any) => ({
-                ...msg,
-                timestamp: new Date(msg.timestamp),
-                scheduledSendTime: msg.scheduledSendTime ? new Date(msg.scheduledSendTime) : undefined,
-              })),
-            };
+             return {
+               ...conv,
+               minDelayMinutes,
+               maxDelayMinutes,
+               messages: conv.messages.map((msg: any) => ({
+                 ...msg,
+                 timestamp: new Date(msg.timestamp),
+                 scheduledSendTime: msg.scheduledSendTime ? new Date(msg.scheduledSendTime) : undefined,
+                 emailMessageId: msg.emailMessageId, // Preserve Message-ID for threading
+               })),
+             };
           });
         } catch (e) {
           console.error("Failed to parse saved conversations:", e);
@@ -161,7 +163,7 @@ export default function Home() {
   // Email config dialog
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [configAccountId, setConfigAccountId] = useState<string | null>(null);
-  const [smtpHost, setSmtpHost] = useState("smtp.gmail.com");
+  const [smtpHost, setSmtpHost] = useState("");
   const [smtpPort, setSmtpPort] = useState("587");
   const [smtpUser, setSmtpUser] = useState("");
   const [smtpPassword, setSmtpPassword] = useState("");
@@ -340,9 +342,10 @@ export default function Home() {
     }
   };
 
-  const sendEmailInternal = async (message: Message, senderAccount: Account, recipients: Account[], conversationSubject: string, conversationId: string) => {
+  const sendEmailInternal = async (message: Message, senderAccount: Account, recipients: Account[], conversationSubject: string, conversationId: string, previousMessageId?: string) => {
     const recipientsList = recipients.map(acc => acc.email).join(", ");
-    const subject = conversationSubject;
+    // Add "Re: " prefix if this is a reply (not the first message)
+    const subject = previousMessageId ? (conversationSubject.startsWith("Re: ") ? conversationSubject : `Re: ${conversationSubject}`) : conversationSubject;
 
     const response = await fetch(`${getApiUrl()}/api/send-email`, {
       method: "POST",
@@ -360,6 +363,7 @@ export default function Home() {
           ...senderAccount.emailConfig,
         },
         conversationId: conversationId, // Pass conversation ID for threading
+        previousMessageId: previousMessageId, // Pass previous message's Message-ID for threading
       }),
     });
 
@@ -398,13 +402,18 @@ export default function Home() {
       const recipients = conv.otherAccounts;
       // Use conversation's unique subject, or generate one if it doesn't exist
       const subject = conv.emailSubject || `Conversation: ${conv.name}`;
-      await sendEmailInternal(message, senderAccount, recipients, subject, conv.id);
       
-      // Mark message as sent
+      // Find the previous sent message in this conversation to get its Message-ID
+      const sentMessages = conv.messages.filter(m => m.sent && m.emailMessageId);
+      const previousMessage = sentMessages.length > 0 ? sentMessages[sentMessages.length - 1] : undefined;
+      
+      const result = await sendEmailInternal(message, senderAccount, recipients, subject, conv.id, previousMessage?.emailMessageId);
+      
+      // Mark message as sent and store the Message-ID
       updateActiveConversation(c => ({
         ...c,
         messages: c.messages.map(m => 
-          m.id === message.id ? { ...m, sent: true, scheduledSendTime: undefined } : m
+          m.id === message.id ? { ...m, sent: true, scheduledSendTime: undefined, emailMessageId: result.messageId } : m
         ),
       }));
       
@@ -547,6 +556,8 @@ export default function Home() {
 
       // Now send messages according to schedule
       const skippedAccounts: string[] = [];
+      let lastMessageId: string | undefined; // Track the last sent message's Message-ID for threading
+      
       for (let i = 0; i < messagesWithSchedule.length; i++) {
         const message = messagesWithSchedule[i];
         const senderAccount = allParticipants.find(acc => acc.id === message.accountId);
@@ -576,14 +587,17 @@ export default function Home() {
 
           // Use conversation's unique subject for all messages in this conversation
           const subject = conv.emailSubject || `Conversation: ${conv.name}`;
-          await sendEmailInternal(message, senderAccount, recipients, subject, conv.id);
+          const result = await sendEmailInternal(message, senderAccount, recipients, subject, conv.id, lastMessageId);
           sentCount++;
           
-          // Mark message as sent
+          // Store the Message-ID for the next message to reference
+          lastMessageId = result.messageId;
+          
+          // Mark message as sent and store the Message-ID
           updateActiveConversation(c => ({
             ...c,
             messages: c.messages.map(m => 
-              m.id === message.id ? { ...m, sent: true, scheduledSendTime: undefined } : m
+              m.id === message.id ? { ...m, sent: true, scheduledSendTime: undefined, emailMessageId: result.messageId } : m
             ),
           }));
         } catch (err) {
@@ -595,7 +609,7 @@ export default function Home() {
               m.id === message.id ? { ...m, scheduledSendTime: undefined } : m
             ),
           }));
-          // Continue with next message
+          // Continue with next message (but don't update lastMessageId, so threading continues correctly)
         }
       }
 
@@ -667,7 +681,7 @@ export default function Home() {
 
   const openConfigDialog = (account: Account) => {
     setConfigAccountId(account.id);
-    setSmtpHost(account.emailConfig?.smtpHost || "smtp.gmail.com");
+    setSmtpHost(account.emailConfig?.smtpHost || "");
     setSmtpPort(account.emailConfig?.smtpPort?.toString() || "587");
     setSmtpUser(account.emailConfig?.smtpUser || account.email);
     setSmtpPassword(account.emailConfig?.smtpPassword || "");
