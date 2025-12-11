@@ -1,9 +1,12 @@
 name: Deploy to GitHub Pages
 
+# DISABLED: This project now uses Vercel for deployment
+# GitHub Pages workflow is disabled since we're using Vercel which supports API routes
 on:
-  push:
-    branches:
-      - main
+  # Disabled - using Vercel instead
+  # push:
+  #   branches:
+  #     - main
   workflow_dispatch:
 
 permissions:
