@@ -61,12 +61,11 @@ interface Conversation {
 const STORAGE_KEY_ACCOUNTS = "email-system-accounts";
 const STORAGE_KEY_CONVERSATIONS = "email-system-conversations";
 
-// Get API base URL - use environment variable or default to relative path for local dev
+// Get API base URL - use environment variable or default to relative path
+// On Vercel, API routes are on the same domain, so use relative paths
 const getApiUrl = () => {
-  if (typeof window !== "undefined") {
-    // In browser, use environment variable or fallback to relative path
-    return process.env.NEXT_PUBLIC_API_URL || "";
-  }
+  // If NEXT_PUBLIC_API_URL is set (for GitHub Pages), use it
+  // Otherwise use relative paths (works for Vercel and local dev)
   return process.env.NEXT_PUBLIC_API_URL || "";
 };
 

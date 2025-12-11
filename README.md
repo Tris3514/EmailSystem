@@ -10,46 +10,43 @@ AI-powered email generation and sending system built with Next.js.
 - Scheduled email sending with random delays
 - Dark mode UI with custom font
 
-## Deployment to GitHub Pages
+## Deployment to Vercel (Recommended)
 
-This project is configured to deploy to GitHub Pages. However, **API routes must be hosted separately** since GitHub Pages only serves static files.
+This project is configured to deploy to Vercel, which supports full Next.js with API routes.
 
-### Step 1: Deploy API Routes
+### Step 1: Deploy to Vercel
 
-The API routes (`/api/generate-message` and `/api/send-email`) need to be deployed to a platform that supports serverless functions:
+1. Go to [Vercel](https://vercel.com) and sign in with your GitHub account
+2. Click "Add New Project"
+3. Import your GitHub repository (`Tris3514/EmailSystem`)
+4. Vercel will automatically detect Next.js
+5. Add environment variables:
+   - `OPENAI_API_KEY` - Your OpenAI API key (required for message generation)
+6. Click "Deploy"
+7. Your site will be live at: `https://your-project.vercel.app`
 
-**Option A: Vercel (Recommended)**
-1. Create a new project on [Vercel](https://vercel.com)
-2. Import your GitHub repository
-3. Add environment variables:
-   - `OPENAI_API_KEY` - Your OpenAI API key
-4. Deploy - Vercel will automatically detect Next.js and deploy
-5. Copy your Vercel deployment URL (e.g., `https://your-project.vercel.app`)
+### Step 2: Configure Environment Variables
 
-**Option B: Netlify**
-1. Create a new site on [Netlify](https://netlify.com)
-2. Connect your GitHub repository
-3. Build settings:
-   - Build command: `npm run build`
-   - Publish directory: `.next`
-4. Add environment variables:
-   - `OPENAI_API_KEY` - Your OpenAI API key
-5. Deploy
+In your Vercel project settings:
+1. Go to Settings → Environment Variables
+2. Add:
+   - `OPENAI_API_KEY` = your OpenAI API key
+3. Redeploy if needed for changes to take effect
 
-### Step 2: Configure GitHub Pages
+### Step 3: Access Your Site
 
-1. Go to your GitHub repository settings
-2. Navigate to "Pages" section
-3. Under "Source", select "GitHub Actions"
-4. Add a GitHub secret:
-   - Go to Settings → Secrets and variables → Actions
-   - Add secret: `NEXT_PUBLIC_API_URL` with your API deployment URL (e.g., `https://your-project.vercel.app`)
+Once deployed, your site will be available at your Vercel URL. Vercel automatically:
+- Deploys on every push to `main` branch
+- Provides HTTPS
+- Handles API routes serverlessly
+- Supports custom domains (optional)
 
-### Step 3: Deploy
+## Alternative: GitHub Pages Deployment
 
-1. Push your code to the `main` branch
-2. GitHub Actions will automatically build and deploy to GitHub Pages
-3. Your site will be available at: `https://yourusername.github.io/repository-name/`
+If you prefer GitHub Pages, you'll need to:
+1. Deploy API routes separately (e.g., to Vercel)
+2. Set `NEXT_PUBLIC_API_URL` environment variable
+3. Use static export (see `next.config.js` for configuration)
 
 ## Local Development
 

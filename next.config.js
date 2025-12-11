@@ -1,14 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  // Vercel supports full Next.js with API routes, no need for static export
   images: {
     unoptimized: true,
   },
-  trailingSlash: true,
-  // Disable server-side features for static export
-  // API routes will need to be hosted separately
-  // Skip API routes during static export (they won't work on GitHub Pages)
-  distDir: '.next',
 }
 
 module.exports = nextConfig
