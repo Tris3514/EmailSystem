@@ -546,10 +546,14 @@ export default function Home() {
       }));
 
       // Now send messages according to schedule
+      const skippedAccounts: string[] = [];
       for (let i = 0; i < messagesWithSchedule.length; i++) {
         const message = messagesWithSchedule[i];
         const senderAccount = allParticipants.find(acc => acc.id === message.accountId);
         if (!senderAccount || !senderAccount.emailConfig) {
+          if (!skippedAccounts.includes(message.accountName)) {
+            skippedAccounts.push(message.accountName);
+          }
           console.warn(`Skipping message from ${message.accountName} - no email config`);
           continue;
         }
@@ -595,7 +599,11 @@ export default function Home() {
         }
       }
 
-      setSuccess(`Sent ${sentCount} out of ${conv.messages.length} messages`);
+      let successMessage = `Sent ${sentCount} out of ${conv.messages.length} messages`;
+      if (skippedAccounts.length > 0) {
+        successMessage += `. Skipped ${skippedAccounts.length} account(s) without email config: ${skippedAccounts.join(", ")}. Please configure email settings for these accounts.`;
+      }
+      setSuccess(successMessage);
     } catch (err: any) {
       setError(err.message || "Failed to send messages");
     } finally {
