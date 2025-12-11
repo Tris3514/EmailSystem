@@ -1061,7 +1061,7 @@ export default function Home() {
                                             <div className="flex items-center gap-2">
                                               <span className="font-medium">{msg.accountName}</span>
                                               {msg.sent && (
-                                                <CheckCircle2 className="h-4 w-4 text-green-500" title="Sent" />
+                                                <CheckCircle2 className="h-4 w-4 text-green-500" />
                                               )}
                                               {isScheduled && (
                                                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
