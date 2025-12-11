@@ -5,7 +5,11 @@ import OpenAI from "openai";
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not set in environment variables. Please add it in Vercel project settings.");
+    const isVercel = process.env.VERCEL === '1';
+    const errorMessage = isVercel
+      ? "OPENAI_API_KEY is not set. Please add it in Vercel project settings: Settings → Environment Variables → Add OPENAI_API_KEY"
+      : "OPENAI_API_KEY is not set. For local development, create a .env.local file with: OPENAI_API_KEY=your_key_here";
+    throw new Error(errorMessage);
   }
   return new OpenAI({
     apiKey: apiKey,
