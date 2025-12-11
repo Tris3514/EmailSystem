@@ -28,6 +28,12 @@ interface Message {
   sent?: boolean;
   scheduledSendTime?: Date; // When this message is scheduled to be sent
   emailMessageId?: string; // The Message-ID from the email server (for threading)
+  cost?: number; // Estimated cost in USD
+  tokens?: { // Token usage tracking
+    input: number;
+    output: number;
+    total: number;
+  };
 }
 
 interface EmailConfig {
@@ -115,6 +121,8 @@ export default function Home() {
                  timestamp: new Date(msg.timestamp),
                  scheduledSendTime: msg.scheduledSendTime ? new Date(msg.scheduledSendTime) : undefined,
                  emailMessageId: msg.emailMessageId, // Preserve Message-ID for threading
+                 cost: msg.cost, // Preserve cost
+                 tokens: msg.tokens, // Preserve tokens
                })),
              };
           });
@@ -328,6 +336,12 @@ export default function Home() {
         accountEmail: conv.selectedAccount.email,
         content: data.message,
         timestamp: new Date(),
+        cost: data.usage?.cost,
+        tokens: data.usage ? {
+          input: data.usage.inputTokens,
+          output: data.usage.outputTokens,
+          total: data.usage.totalTokens,
+        } : undefined,
       };
 
       updateActiveConversation(c => ({
@@ -488,6 +502,12 @@ export default function Home() {
           accountEmail: sender.email,
           content: data.message,
           timestamp: new Date(),
+          cost: data.usage?.cost,
+          tokens: data.usage ? {
+            input: data.usage.inputTokens,
+            output: data.usage.outputTokens,
+            total: data.usage.totalTokens,
+          } : undefined,
         };
 
         newMessages.push(newMessage);
@@ -500,7 +520,9 @@ export default function Home() {
         prompt: "",
       }));
 
-      setSuccess(`Generated ${newMessages.length} messages`);
+      const totalCost = newMessages.reduce((sum, msg) => sum + (msg.cost || 0), 0);
+      const totalTokens = newMessages.reduce((sum, msg) => sum + (msg.tokens?.total || 0), 0);
+      setSuccess(`Generated ${newMessages.length} messages${totalCost > 0 ? ` ($${totalCost.toFixed(4)}, ${totalTokens.toLocaleString()} tokens)` : ''}`);
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {
@@ -1041,7 +1063,21 @@ export default function Home() {
                             <Card>
                               <CardHeader>
                                 <div className="flex items-center justify-between">
-                                  <CardTitle className="text-lg">Messages</CardTitle>
+                                  <div className="flex items-center gap-4">
+                                    <CardTitle className="text-lg">Messages</CardTitle>
+                                    {(() => {
+                                      const totalCost = conv.messages.reduce((sum, msg) => sum + (msg.cost || 0), 0);
+                                      const totalTokens = conv.messages.reduce((sum, msg) => sum + (msg.tokens?.total || 0), 0);
+                                      if (totalCost > 0 || totalTokens > 0) {
+                                        return (
+                                          <span className="text-sm text-muted-foreground">
+                                            Total: ${totalCost.toFixed(4)} ({totalTokens.toLocaleString()} tokens)
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
+                                  </div>
                                   {conv.messages.length > 0 && (
                                     <Button
                                       variant="ghost"
@@ -1092,9 +1128,16 @@ export default function Home() {
                                                 </div>
                                               )}
                                             </div>
-                                            <span className="text-sm text-muted-foreground">
-                                              {new Date(msg.timestamp).toLocaleTimeString()}
-                                            </span>
+                                            <div className="flex flex-col items-end gap-1">
+                                              <span className="text-sm text-muted-foreground">
+                                                {new Date(msg.timestamp).toLocaleTimeString()}
+                                              </span>
+                                              {msg.cost !== undefined && msg.tokens && (
+                                                <span className="text-xs text-muted-foreground">
+                                                  ${msg.cost.toFixed(6)} ({msg.tokens.total} tokens)
+                                                </span>
+                                              )}
+                                            </div>
                                           </div>
                                           <p className="text-foreground mb-2">{msg.content}</p>
                                           {conv.selectedAccount?.emailConfig && !msg.sent && (

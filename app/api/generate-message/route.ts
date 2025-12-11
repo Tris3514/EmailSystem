@@ -120,7 +120,33 @@ Generate a natural email message that fits the conversation. Keep it concise (2-
       );
     }
 
-    return NextResponse.json({ message: messageContent });
+    // Extract token usage
+    const usage = completion.usage;
+    const inputTokens = usage?.prompt_tokens || 0;
+    const outputTokens = usage?.completion_tokens || 0;
+    const totalTokens = usage?.total_tokens || 0;
+
+    // Calculate cost (gpt-4o-mini pricing as of 2024)
+    // Input: $0.15 per million tokens, Output: $0.60 per million tokens
+    const INPUT_COST_PER_MILLION = 0.15;
+    const OUTPUT_COST_PER_MILLION = 0.60;
+
+    const inputCost = (inputTokens / 1_000_000) * INPUT_COST_PER_MILLION;
+    const outputCost = (outputTokens / 1_000_000) * OUTPUT_COST_PER_MILLION;
+    const totalCost = inputCost + outputCost;
+
+    console.log(`Token usage: ${inputTokens} input + ${outputTokens} output = ${totalTokens} total`);
+    console.log(`Estimated cost: $${totalCost.toFixed(6)}`);
+
+    return NextResponse.json({ 
+      message: messageContent,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        cost: totalCost,
+      }
+    });
   } catch (error: any) {
     console.error("Error generating message:", error);
     
