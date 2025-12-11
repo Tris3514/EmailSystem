@@ -12,9 +12,11 @@ interface EmailAccount {
 }
 
 export async function POST(request: NextRequest) {
+  let accountConfig: EmailAccount | undefined;
   try {
     const body = await request.json();
-    const { from, to, subject, text, html, accountConfig, conversationId } = body;
+    const { from, to, subject, text, html, accountConfig: config, conversationId } = body;
+    accountConfig = config;
 
     // Validate required fields
     if (!from || !to || !subject || (!text && !html)) {
@@ -31,7 +33,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { smtpHost, smtpPort, smtpUser, smtpPassword, smtpSecure } = accountConfig as EmailAccount;
+    const { smtpHost, smtpPort, smtpUser, smtpPassword, smtpSecure } = accountConfig;
 
     if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
       return NextResponse.json(
@@ -140,9 +142,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (error.code === "ENOTFOUND" || error.message?.includes("getaddrinfo ENOTFOUND")) {
+      const host = accountConfig?.smtpHost || "SMTP host";
       return NextResponse.json(
         { 
-          error: `DNS resolution failed for "${smtpHost}". Please check:\n1. Your internet connection\n2. The SMTP host address is correct\n3. Your firewall/DNS settings\n\nCommon SMTP hosts:\n- Gmail: smtp.gmail.com\n- Outlook: smtp-mail.outlook.com\n- Yahoo: smtp.mail.yahoo.com` 
+          error: `DNS resolution failed for "${host}". Please check:\n1. Your internet connection\n2. The SMTP host address is correct\n3. Your firewall/DNS settings\n\nCommon SMTP hosts:\n- Gmail: smtp.gmail.com\n- Outlook: smtp-mail.outlook.com\n- Yahoo: smtp.mail.yahoo.com` 
         },
         { status: 503 }
       );
