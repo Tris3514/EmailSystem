@@ -35,6 +35,8 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://your-api-url.vercel.app' }}
+          # Provide a dummy key to prevent build errors (API routes won't be used in static export)
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-build' }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
