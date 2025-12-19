@@ -454,16 +454,16 @@ export async function POST(request: NextRequest) {
         try {
           const convResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: currentSpreadsheetId,
-            range: "Conversations!A2:K1000",
+            range: "Conversations!A2:I1000",
           });
           if (convResponse.data.values) {
             conversationsData = convResponse.data.values.map((row: any[]) => ({
               id: row[0] || "",
               name: row[1] || "",
               emailSubject: row[5] || "",
-              minDelayMinutes: parseFloat(row[6]) || 1,
-              maxDelayMinutes: parseFloat(row[7]) || 5,
-              conversationLength: parseInt(row[8]) || 6,
+              minDelayMinutes: 1, // Default values
+              maxDelayMinutes: 5, // Default values
+              conversationLength: parseInt(row[6]) || 6,
               selectedAccount: null,
               otherAccounts: [],
               messages: [],
