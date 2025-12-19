@@ -215,6 +215,8 @@ export async function POST(request: NextRequest) {
       if (accountRows.length > 0) {
         try {
           console.log(`Writing ${accountRows.length} account rows to sheet "Accounts"...`);
+          console.log("Account rows data:", JSON.stringify(accountRows, null, 2));
+          
           const updateResponse = await sheets.spreadsheets.values.update({
             spreadsheetId: currentSpreadsheetId,
             range: "Accounts!A2",
@@ -223,13 +225,23 @@ export async function POST(request: NextRequest) {
               values: accountRows,
             },
           });
+          
           console.log(`Successfully wrote ${accountRows.length} account rows. Updated cells:`, updateResponse.data.updatedCells);
+          console.log("Update response:", JSON.stringify(updateResponse.data, null, 2));
+          
+          // Verify the write by reading back
+          const verifyResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId: currentSpreadsheetId,
+            range: "Accounts!A2:I10",
+          });
+          console.log("Verified written data:", verifyResponse.data.values);
         } catch (writeError: any) {
           console.error("Error writing account data:", writeError);
+          console.error("Error details:", JSON.stringify(writeError, null, 2));
           throw new Error(`Failed to write account data: ${writeError.message}`);
         }
       } else {
-        console.log("No account rows to write");
+        console.log("No account rows to write - accounts array is empty");
       }
 
       return NextResponse.json({
