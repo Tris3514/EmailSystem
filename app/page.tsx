@@ -1487,6 +1487,24 @@ export default function Home() {
                       <Database className="mr-2 h-4 w-4" />
                       Sync Conversations Only
                     </Button>
+                    <Button
+                      onClick={loadFromGoogleSheets}
+                      disabled={loadingFromSheets}
+                      variant="secondary"
+                      type="button"
+                    >
+                      {loadingFromSheets ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Database className="mr-2 h-4 w-4" />
+                          Load from Google Sheets
+                        </>
+                      )}
+                    </Button>
                   </div>
                   <div className="p-3 bg-muted rounded-lg">
                     <div className="text-sm">
