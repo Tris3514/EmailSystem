@@ -42,10 +42,51 @@ async function verifySpreadsheetAccess(sheets: any) {
   }
 }
 
+// Get or create a sheet by name
+async function getOrCreateSheet(sheets: any, spreadsheetId: string, sheetName: string) {
+  try {
+    // Get all sheets in the spreadsheet
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const existingSheet = spreadsheet.data.sheets?.find(
+      (sheet: any) => sheet.properties.title === sheetName
+    );
+
+    if (existingSheet) {
+      console.log(`Sheet "${sheetName}" already exists`);
+      return existingSheet.properties.sheetId;
+    }
+
+    // Create the sheet if it doesn't exist
+    console.log(`Creating sheet "${sheetName}"...`);
+    const addSheetResponse = await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: { title: sheetName },
+            },
+          },
+        ],
+      },
+    });
+
+    const newSheetId = addSheetResponse.data.replies[0].addSheet?.properties.sheetId;
+    console.log(`Successfully created sheet "${sheetName}" with ID: ${newSheetId}`);
+    return newSheetId;
+  } catch (error: any) {
+    console.error(`Error getting/creating sheet "${sheetName}":`, error.message);
+    throw error;
+  }
+}
+
 // Initialize sheet headers
 async function initializeSheet(sheets: any, spreadsheetId: string, sheetName: string, headers: string[]) {
   try {
-    // Check if sheet exists and has headers
+    // Make sure the sheet exists
+    await getOrCreateSheet(sheets, spreadsheetId, sheetName);
+
+    // Check if headers already exist
     const range = `${sheetName}!A1:${String.fromCharCode(64 + headers.length)}1`;
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -53,22 +94,32 @@ async function initializeSheet(sheets: any, spreadsheetId: string, sheetName: st
     });
 
     if (response.data.values && response.data.values.length > 0) {
-      // Headers already exist
+      console.log(`Headers already exist for sheet "${sheetName}"`);
       return;
     }
-  } catch (error) {
-    // Sheet might not exist or be empty
+  } catch (error: any) {
+    // If get fails, sheet might not exist - we'll create it below
+    if (!error.message?.includes("not found")) {
+      console.error(`Error checking sheet "${sheetName}":`, error.message);
+    }
   }
 
   // Set headers
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `${sheetName}!A1`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [headers],
-    },
-  });
+  try {
+    console.log(`Setting headers for sheet "${sheetName}"...`);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!A1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [headers],
+      },
+    });
+    console.log(`Successfully set headers for sheet "${sheetName}"`);
+  } catch (error: any) {
+    console.error(`Error setting headers for sheet "${sheetName}":`, error.message);
+    throw error;
+  }
 }
 
 // Sync accounts to Google Sheets
@@ -146,6 +197,7 @@ export async function POST(request: NextRequest) {
 
       // Add account data
       if (accountRows.length > 0) {
+        console.log(`Writing ${accountRows.length} account rows to sheet "Accounts"...`);
         await sheets.spreadsheets.values.update({
           spreadsheetId: currentSpreadsheetId,
           range: "Accounts!A2",
@@ -154,6 +206,9 @@ export async function POST(request: NextRequest) {
             values: accountRows,
           },
         });
+        console.log(`Successfully wrote ${accountRows.length} account rows`);
+      } else {
+        console.log("No account rows to write");
       }
 
       return NextResponse.json({
@@ -252,6 +307,7 @@ export async function POST(request: NextRequest) {
 
       // Add conversation data
       if (conversationRows.length > 0) {
+        console.log(`Writing ${conversationRows.length} conversation rows to sheet "Conversations"...`);
         await sheets.spreadsheets.values.update({
           spreadsheetId: currentSpreadsheetId,
           range: "Conversations!A2",
@@ -260,10 +316,14 @@ export async function POST(request: NextRequest) {
             values: conversationRows,
           },
         });
+        console.log(`Successfully wrote ${conversationRows.length} conversation rows`);
+      } else {
+        console.log("No conversation rows to write");
       }
 
       // Add message data
       if (messageRows.length > 0) {
+        console.log(`Writing ${messageRows.length} message rows to sheet "Messages"...`);
         await sheets.spreadsheets.values.update({
           spreadsheetId: currentSpreadsheetId,
           range: "Messages!A2",
@@ -272,6 +332,9 @@ export async function POST(request: NextRequest) {
             values: messageRows,
           },
         });
+        console.log(`Successfully wrote ${messageRows.length} message rows`);
+      } else {
+        console.log("No message rows to write");
       }
 
       return NextResponse.json({
