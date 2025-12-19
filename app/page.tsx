@@ -1856,14 +1856,14 @@ export default function Home() {
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Conversation</DialogTitle>
+            <DialogTitle>Rename Subject</DialogTitle>
             <DialogDescription>
-              Enter a new name for this conversation.
+              Enter a new subject for this email chain.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="renameConversationName">Conversation Name</Label>
+              <Label htmlFor="renameConversationName">Subject</Label>
               <Input
                 id="renameConversationName"
                 placeholder="Enter conversation name"
