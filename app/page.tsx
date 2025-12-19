@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -248,6 +248,8 @@ export default function Home() {
 
   // Dropdown menu state (per conversation)
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // Delete conversation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1069,10 +1071,12 @@ export default function Home() {
                 ) : (
                   <div className="flex gap-4 min-h-[600px]">
                     {/* Left Sidebar - Conversations List */}
-                    <div className="w-64 border-r pr-4 flex-shrink-0">
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold mb-3">Conversations</h3>
-                        <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-400px)]">
+                    <div className="w-64 border-r pr-4 flex-shrink-0 flex flex-col">
+                      <div className="mb-3">
+                        <h3 className="text-sm font-semibold">Conversations</h3>
+                      </div>
+                      <div className="flex-1 overflow-y-auto min-h-0">
+                        <div className="space-y-1">
                           {conversations.map((conv) => (
                             <div
                               key={conv.id}
@@ -1095,8 +1099,11 @@ export default function Home() {
                                   {conv.messages.length} message{conv.messages.length !== 1 ? "s" : ""}
                                 </div>
                               </div>
-                              <div className="relative ml-2">
+                              <div className="relative ml-2 shrink-0">
                                 <Button
+                                  ref={(el) => {
+                                    buttonRefs.current[conv.id] = el;
+                                  }}
                                   size="sm"
                                   variant="ghost"
                                   type="button"
@@ -1107,21 +1114,36 @@ export default function Home() {
                                   }`}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    const button = buttonRefs.current[conv.id];
+                                    if (button) {
+                                      const rect = button.getBoundingClientRect();
+                                      setDropdownPosition({
+                                        top: rect.bottom + 4,
+                                        right: window.innerWidth - rect.right,
+                                      });
+                                    }
                                     setOpenDropdownId(openDropdownId === conv.id ? null : conv.id);
                                   }}
                                 >
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
-                                {openDropdownId === conv.id && (
+                                {openDropdownId === conv.id && dropdownPosition && (
                                   <>
                                     <div
                                       className="fixed inset-0 z-10"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setOpenDropdownId(null);
+                                        setDropdownPosition(null);
                                       }}
                                     />
-                                    <div className="absolute right-0 top-8 z-20 w-48 bg-background border border-border rounded-md shadow-lg">
+                                    <div 
+                                      className="fixed z-20 w-48 bg-background border border-border rounded-md shadow-lg"
+                                      style={{
+                                        top: `${dropdownPosition.top}px`,
+                                        right: `${dropdownPosition.right}px`
+                                      }}
+                                    >
                                       <div className="py-1">
                                         <button
                                           type="button"
@@ -1130,6 +1152,7 @@ export default function Home() {
                                             e.stopPropagation();
                                             openRenameDialog(conv);
                                             setOpenDropdownId(null);
+                                            setDropdownPosition(null);
                                           }}
                                         >
                                           <Pencil className="h-4 w-4" />
@@ -1141,6 +1164,8 @@ export default function Home() {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             openDeleteDialog(conv);
+                                            setOpenDropdownId(null);
+                                            setDropdownPosition(null);
                                           }}
                                         >
                                           <Trash2 className="h-4 w-4" />
@@ -1193,7 +1218,7 @@ export default function Home() {
                                   </div>
                                   {/* Accounts List */}
                                   <div className="border rounded-md">
-                                    <div className="max-h-[300px] overflow-y-auto">
+                                    <div className="max-h-[400px] overflow-y-auto">
                                       {accounts.length === 0 ? (
                                         <div className="p-4 text-center">
                                           <p className="text-sm text-muted-foreground">No accounts available</p>
