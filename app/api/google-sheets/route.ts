@@ -409,6 +409,79 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (action === "load-data") {
+      // Load data from Google Sheets
+      try {
+        console.log("Loading data from Google Sheets...");
+        
+        // Load accounts
+        let accountsData: any[] = [];
+        try {
+          const accountsResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId: currentSpreadsheetId,
+            range: "Accounts!A2:I1000",
+          });
+          if (accountsResponse.data.values) {
+            accountsData = accountsResponse.data.values.map((row: any[]) => ({
+              id: row[0] || "",
+              name: row[1] || "",
+              email: row[2] || "",
+              personality: row[3] || undefined,
+              emailConfig: row[4] ? {
+                smtpHost: row[4] || "",
+                smtpPort: parseInt(row[5]) || 587,
+                smtpUser: row[6] || "",
+                smtpPassword: "", // Don't store password in sheets
+                smtpSecure: false,
+              } : undefined,
+            }));
+          }
+          console.log(`Loaded ${accountsData.length} accounts from sheet`);
+        } catch (e: any) {
+          console.error("Error loading accounts:", e.message);
+        }
+
+        // Load conversations (simplified - just metadata)
+        let conversationsData: any[] = [];
+        try {
+          const convResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId: currentSpreadsheetId,
+            range: "Conversations!A2:K1000",
+          });
+          if (convResponse.data.values) {
+            conversationsData = convResponse.data.values.map((row: any[]) => ({
+              id: row[0] || "",
+              name: row[1] || "",
+              emailSubject: row[5] || "",
+              minDelayMinutes: parseFloat(row[6]) || 1,
+              maxDelayMinutes: parseFloat(row[7]) || 5,
+              conversationLength: parseInt(row[8]) || 6,
+              selectedAccount: null,
+              otherAccounts: [],
+              messages: [],
+              prompt: "",
+            }));
+          }
+          console.log(`Loaded ${conversationsData.length} conversations from sheet`);
+        } catch (e: any) {
+          console.error("Error loading conversations:", e.message);
+        }
+
+        return NextResponse.json({
+          success: true,
+          accounts: accountsData,
+          conversations: conversationsData,
+          message: `Loaded ${accountsData.length} account(s) and ${conversationsData.length} conversation(s) from Google Sheets`,
+        });
+      } catch (error: any) {
+        console.error("Error loading data:", error);
+        return NextResponse.json(
+          { error: `Failed to load data: ${error.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
     console.error("Google Sheets sync error:", error);
