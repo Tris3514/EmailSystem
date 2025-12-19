@@ -775,10 +775,6 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        // If permission error and we have a stored ID, suggest creating a new one
-        if (data.error?.includes("permission") && googleSheetsId && !forceNew) {
-          throw new Error(`${data.error}\n\nTip: The stored spreadsheet may have been created by a different account. Try clicking "Create New Spreadsheet" to create one with the service account.`);
-        }
         throw new Error(data.error || "Failed to sync to Google Sheets");
       }
 
@@ -799,15 +795,6 @@ export default function Home() {
     }
   };
 
-  const clearSpreadsheetId = () => {
-    if (confirm("This will clear the stored spreadsheet ID. A new spreadsheet will be created on the next sync. Continue?")) {
-      setGoogleSheetsId(null);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem(STORAGE_KEY_GOOGLE_SHEETS_ID);
-      }
-      setSuccess("Spreadsheet ID cleared. Next sync will create a new spreadsheet.");
-    }
-  };
 
   const handleDeleteAccount = (accountId: string) => {
     if (confirm("Are you sure you want to delete this account?")) {
@@ -1398,33 +1385,20 @@ export default function Home() {
                       <Database className="mr-2 h-4 w-4" />
                       Sync Conversations Only
                     </Button>
-                    <Button
-                      onClick={() => syncToGoogleSheets("all", true)}
-                      disabled={syncingToSheets || (accounts.length === 0 && conversations.length === 0)}
-                      variant="secondary"
-                      type="button"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create New Spreadsheet
-                    </Button>
                   </div>
-                  {googleSheetsId && (
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="text-sm">
-                        <div className="font-medium">Spreadsheet ID:</div>
-                        <div className="text-muted-foreground font-mono text-xs mt-1">{googleSheetsId}</div>
-                      </div>
-                      <Button
-                        onClick={clearSpreadsheetId}
-                        variant="ghost"
-                        size="sm"
-                        type="button"
+                  <div className="p-3 bg-muted rounded-lg">
+                    <div className="text-sm">
+                      <div className="font-medium">Persistent Spreadsheet:</div>
+                      <a
+                        href="https://docs.google.com/spreadsheets/d/1g58SNJO1b6o7v8IVq1UizeJZG1PaaP5oXtnrE06kVlQ"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-mono text-xs mt-1 block"
                       >
-                        <X className="mr-2 h-4 w-4" />
-                        Clear
-                      </Button>
+                        1g58SNJO1b6o7v8IVq1UizeJZG1PaaP5oXtnrE06kVlQ
+                      </a>
                     </div>
-                  )}
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     <p className="font-medium mb-2">The spreadsheet will contain three sheets:</p>
                     <ul className="list-disc list-inside space-y-1">
@@ -1433,7 +1407,7 @@ export default function Home() {
                       <li><strong>Messages:</strong> All messages with costs and token usage</li>
                     </ul>
                     <p className="mt-3 text-xs">
-                      <strong>Note:</strong> If you get permission errors, make sure your service account has the "Editor" or "Owner" role in your Google Cloud project IAM settings. You can also click "Create New Spreadsheet" to force creation of a new spreadsheet.
+                      <strong>Note:</strong> Make sure the spreadsheet is shared with the service account email: <code className="text-xs">tris-249@email-system-database.iam.gserviceaccount.com</code> with Editor access.
                     </p>
                   </div>
                 </div>
