@@ -82,16 +82,20 @@ const getApiUrl = () => {
 };
 
 export default function Home() {
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const authStatus = localStorage.getItem(STORAGE_KEY_AUTHENTICATED);
-      return authStatus === "true";
-    }
-    return false;
-  });
+  // Authentication state - start with false to avoid hydration mismatch
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check authentication status after mount (client-side only)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const authStatus = localStorage.getItem(STORAGE_KEY_AUTHENTICATED);
+      setIsAuthenticated(authStatus === "true");
+      setIsCheckingAuth(false);
+    }
+  }, []);
 
   // Load accounts from localStorage on mount
   const [accounts, setAccounts] = useState<Account[]>(() => {
@@ -227,6 +231,15 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 
+  // Check authentication status after mount (client-side only) - prevents hydration mismatch
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const authStatus = localStorage.getItem(STORAGE_KEY_AUTHENTICATED);
+      setIsAuthenticated(authStatus === "true");
+      setIsCheckingAuth(false);
+    }
+  }, []);
+
   // Auto-clear success messages after 5 seconds
   useEffect(() => {
     if (success) {
@@ -305,6 +318,15 @@ export default function Home() {
       setPasswordInput("");
     }
   };
+
+  // Show loading state while checking authentication (prevents hydration mismatch)
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   // Show login screen if not authenticated
   if (!isAuthenticated) {
