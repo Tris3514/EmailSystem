@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 
-// Initialize Google Sheets client
-const getSheetsClient = () => {
+// Get shared auth instance
+const getAuth = () => {
   const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
   if (!credentials) {
     throw new Error("GOOGLE_SHEETS_CREDENTIALS environment variable is not set");
@@ -19,16 +19,29 @@ const getSheetsClient = () => {
     throw new Error("GOOGLE_SHEETS_CREDENTIALS is missing required fields (client_email or private_key)");
   }
 
-  const auth = new google.auth.GoogleAuth({
+  return new google.auth.GoogleAuth({
     credentials: parsedCredentials,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file", // Needed to create files
+    ],
   });
+};
 
+// Initialize Google Sheets client
+const getSheetsClient = () => {
+  const auth = getAuth();
   return google.sheets({ version: "v4", auth });
 };
 
+// Initialize Google Drive client (needed to create spreadsheets)
+const getDriveClient = () => {
+  const auth = getAuth();
+  return google.drive({ version: "v3", auth });
+};
+
 // Get or create spreadsheet
-async function getOrCreateSpreadsheet(sheets: any, spreadsheetId?: string) {
+async function getOrCreateSpreadsheet(sheets: any, drive: any, spreadsheetId?: string) {
   if (spreadsheetId) {
     try {
       // Try to access the existing spreadsheet
@@ -37,41 +50,82 @@ async function getOrCreateSpreadsheet(sheets: any, spreadsheetId?: string) {
       return spreadsheetId;
     } catch (error: any) {
       console.error("Error accessing existing spreadsheet:", error.message);
-      // If we can't access it, create a new one
-      console.log("Creating new spreadsheet instead");
+      // If we can't access it, we'll create a new one below
+      console.log("Cannot access existing spreadsheet, will create a new one");
     }
   }
 
-  // Create new spreadsheet
+  // Create new spreadsheet using Drive API (required for service accounts)
+  // This will only be called if no spreadsheetId is provided or if we can't access the existing one
   try {
-    console.log("Creating new spreadsheet...");
-    const response = await sheets.spreadsheets.create({
+    console.log("Creating new persistent spreadsheet using Drive API...");
+    
+    // Create spreadsheet file using Drive API
+    const fileMetadata = {
+      name: "Email System Database",
+      mimeType: "application/vnd.google-apps.spreadsheet",
+    };
+
+    const driveResponse = await drive.files.create({
+      requestBody: fileMetadata,
+      fields: "id",
+    });
+
+    const newSpreadsheetId = driveResponse.data.id!;
+    console.log("Successfully created new spreadsheet via Drive API:", newSpreadsheetId);
+
+    // Now add the sheets using Sheets API
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: newSpreadsheetId,
       requestBody: {
-        properties: {
-          title: "Email System Database",
-        },
-        sheets: [
+        requests: [
           {
-            properties: { title: "Accounts" },
+            addSheet: {
+              properties: { title: "Accounts" },
+            },
           },
           {
-            properties: { title: "Conversations" },
+            addSheet: {
+              properties: { title: "Conversations" },
+            },
           },
           {
-            properties: { title: "Messages" },
+            addSheet: {
+              properties: { title: "Messages" },
+            },
           },
         ],
       },
     });
 
-    const newSpreadsheetId = response.data.spreadsheetId!;
-    console.log("Successfully created new spreadsheet:", newSpreadsheetId);
-    
-    // Service account already owns the spreadsheet it creates via Sheets API
+    // Delete the default "Sheet1" if it exists
+    try {
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: newSpreadsheetId });
+      const defaultSheet = spreadsheet.data.sheets?.find((s: any) => s.properties.title === "Sheet1");
+      if (defaultSheet) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: newSpreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                deleteSheet: {
+                  sheetId: defaultSheet.properties.sheetId,
+                },
+              },
+            ],
+          },
+        });
+      }
+    } catch (e) {
+      // Ignore errors when deleting default sheet
+      console.log("Could not delete default sheet (this is okay)");
+    }
+
+    console.log("Successfully set up spreadsheet with sheets");
     return newSpreadsheetId;
   } catch (error: any) {
     console.error("Error creating spreadsheet:", error);
-    throw new Error(`Failed to create spreadsheet: ${error.message}. Make sure the service account has the 'Editor' or 'Owner' role in your Google Cloud project.`);
+    throw new Error(`Failed to create spreadsheet: ${error.message}. Make sure:\n1. Google Drive API is enabled in your Google Cloud project\n2. Google Sheets API is enabled\n3. The service account has proper permissions`);
   }
 }
 
@@ -129,9 +183,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const drive = getDriveClient();
+    
     let currentSpreadsheetId;
     try {
-      currentSpreadsheetId = await getOrCreateSpreadsheet(sheets, spreadsheetId);
+      currentSpreadsheetId = await getOrCreateSpreadsheet(sheets, drive, spreadsheetId);
       console.log("Using spreadsheet ID:", currentSpreadsheetId);
     } catch (spreadsheetError: any) {
       console.error("Spreadsheet error:", spreadsheetError);
