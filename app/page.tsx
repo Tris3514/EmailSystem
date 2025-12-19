@@ -747,7 +747,7 @@ export default function Home() {
     setSuccess("Email configuration saved");
   };
 
-  const syncToGoogleSheets = async (syncType: "accounts" | "conversations" | "all" = "all") => {
+  const syncToGoogleSheets = async (syncType: "accounts" | "conversations" | "all" = "all", forceNew = false) => {
     setSyncingToSheets(true);
     setError(null);
     setSuccess(null);
@@ -755,7 +755,8 @@ export default function Home() {
     try {
       const payload: any = {
         action: syncType === "all" ? "sync-all" : syncType === "accounts" ? "sync-accounts" : "sync-conversations",
-        spreadsheetId: googleSheetsId || undefined,
+        // If forceNew is true, don't send spreadsheetId to force creation of a new one
+        spreadsheetId: forceNew ? undefined : (googleSheetsId || undefined),
       };
 
       if (syncType === "accounts" || syncType === "all") {
@@ -776,6 +777,10 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
+        // If permission error and we have a stored ID, suggest creating a new one
+        if (data.error?.includes("permission") && googleSheetsId && !forceNew) {
+          throw new Error(`${data.error}\n\nTip: The stored spreadsheet may have been created by a different account. Try clicking "Create New Spreadsheet" to create one with the service account.`);
+        }
         throw new Error(data.error || "Failed to sync to Google Sheets");
       }
 
@@ -792,6 +797,16 @@ export default function Home() {
       setError(err.message || "Failed to sync to Google Sheets");
     } finally {
       setSyncingToSheets(false);
+    }
+  };
+
+  const clearSpreadsheetId = () => {
+    if (confirm("This will clear the stored spreadsheet ID. A new spreadsheet will be created on the next sync. Continue?")) {
+      setGoogleSheetsId(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(STORAGE_KEY_GOOGLE_SHEETS_ID);
+      }
+      setSuccess("Spreadsheet ID cleared. Next sync will create a new spreadsheet.");
     }
   };
 
@@ -1347,7 +1362,7 @@ export default function Home() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-4">
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       onClick={() => syncToGoogleSheets("all")}
                       disabled={syncingToSheets || (accounts.length === 0 && conversations.length === 0)}
@@ -1384,19 +1399,43 @@ export default function Home() {
                       <Database className="mr-2 h-4 w-4" />
                       Sync Conversations Only
                     </Button>
+                    <Button
+                      onClick={() => syncToGoogleSheets("all", true)}
+                      disabled={syncingToSheets || (accounts.length === 0 && conversations.length === 0)}
+                      variant="secondary"
+                      type="button"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create New Spreadsheet
+                    </Button>
                   </div>
                   {googleSheetsId && (
-                    <div className="text-sm text-muted-foreground">
-                      Spreadsheet ID: {googleSheetsId}
+                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div className="text-sm">
+                        <div className="font-medium">Spreadsheet ID:</div>
+                        <div className="text-muted-foreground font-mono text-xs mt-1">{googleSheetsId}</div>
+                      </div>
+                      <Button
+                        onClick={clearSpreadsheetId}
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Clear
+                      </Button>
                     </div>
                   )}
                   <div className="text-sm text-muted-foreground">
-                    <p>The spreadsheet will contain three sheets:</p>
-                    <ul className="list-disc list-inside mt-2 space-y-1">
+                    <p className="font-medium mb-2">The spreadsheet will contain three sheets:</p>
+                    <ul className="list-disc list-inside space-y-1">
                       <li><strong>Accounts:</strong> All account information including email configuration</li>
                       <li><strong>Conversations:</strong> Conversation metadata and settings</li>
                       <li><strong>Messages:</strong> All messages with costs and token usage</li>
                     </ul>
+                    <p className="mt-3 text-xs">
+                      <strong>Note:</strong> If you get permission errors, make sure your service account has the "Editor" or "Owner" role in your Google Cloud project IAM settings. You can also click "Create New Spreadsheet" to force creation of a new spreadsheet.
+                    </p>
                   </div>
                 </div>
               </CardContent>

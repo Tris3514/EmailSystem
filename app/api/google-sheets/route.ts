@@ -31,37 +31,48 @@ const getSheetsClient = () => {
 async function getOrCreateSpreadsheet(sheets: any, spreadsheetId?: string) {
   if (spreadsheetId) {
     try {
-      await sheets.spreadsheets.get({ spreadsheetId });
+      // Try to access the existing spreadsheet
+      const existingSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+      console.log("Successfully accessed existing spreadsheet:", spreadsheetId);
       return spreadsheetId;
-    } catch (error) {
-      console.log("Spreadsheet not found, creating new one");
+    } catch (error: any) {
+      console.error("Error accessing existing spreadsheet:", error.message);
+      // If we can't access it, create a new one
+      console.log("Creating new spreadsheet instead");
     }
   }
 
   // Create new spreadsheet
-  const response = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: {
-        title: "Email System Database",
+  try {
+    console.log("Creating new spreadsheet...");
+    const response = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: {
+          title: "Email System Database",
+        },
+        sheets: [
+          {
+            properties: { title: "Accounts" },
+          },
+          {
+            properties: { title: "Conversations" },
+          },
+          {
+            properties: { title: "Messages" },
+          },
+        ],
       },
-      sheets: [
-        {
-          properties: { title: "Accounts" },
-        },
-        {
-          properties: { title: "Conversations" },
-        },
-        {
-          properties: { title: "Messages" },
-        },
-      ],
-    },
-  });
+    });
 
-  const newSpreadsheetId = response.data.spreadsheetId!;
-  
-  // Service account already owns the spreadsheet it creates via Sheets API
-  return newSpreadsheetId;
+    const newSpreadsheetId = response.data.spreadsheetId!;
+    console.log("Successfully created new spreadsheet:", newSpreadsheetId);
+    
+    // Service account already owns the spreadsheet it creates via Sheets API
+    return newSpreadsheetId;
+  } catch (error: any) {
+    console.error("Error creating spreadsheet:", error);
+    throw new Error(`Failed to create spreadsheet: ${error.message}. Make sure the service account has the 'Editor' or 'Owner' role in your Google Cloud project.`);
+  }
 }
 
 // Initialize sheet headers
@@ -109,6 +120,7 @@ export async function POST(request: NextRequest) {
     let sheets;
     try {
       sheets = getSheetsClient();
+      console.log("Google Sheets client initialized successfully");
     } catch (authError: any) {
       console.error("Authentication error:", authError);
       return NextResponse.json(
@@ -120,10 +132,23 @@ export async function POST(request: NextRequest) {
     let currentSpreadsheetId;
     try {
       currentSpreadsheetId = await getOrCreateSpreadsheet(sheets, spreadsheetId);
+      console.log("Using spreadsheet ID:", currentSpreadsheetId);
     } catch (spreadsheetError: any) {
       console.error("Spreadsheet error:", spreadsheetError);
+      const errorMsg = spreadsheetError.message || "Unknown error";
+      
+      // Provide more specific error messages
+      if (errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("permission")) {
+        return NextResponse.json(
+          { 
+            error: `Permission denied: ${errorMsg}\n\nTroubleshooting steps:\n1. Make sure Google Sheets API is enabled\n2. Check that your service account has 'Editor' or 'Owner' role in IAM\n3. If using an existing spreadsheet ID, make sure it was created by the service account or share it with: tris-249@email-system-database.iam.gserviceaccount.com\n4. Try creating a new spreadsheet by not providing a spreadsheetId` 
+          },
+          { status: 500 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: `Failed to access spreadsheet: ${spreadsheetError.message}. Make sure the Google Sheets API is enabled in your Google Cloud project.` },
+        { error: `Failed to access spreadsheet: ${errorMsg}. Make sure the Google Sheets API is enabled in your Google Cloud project.` },
         { status: 500 }
       );
     }
