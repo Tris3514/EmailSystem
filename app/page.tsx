@@ -211,6 +211,16 @@ export default function Home() {
     loadFromSheets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
+
+  // Auto-clear success messages after 5 seconds
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
   
   // Add account dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -1147,7 +1157,7 @@ export default function Home() {
                                       <div className="py-1">
                                         <button
                                           type="button"
-                                          className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                                          className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2 text-foreground"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             openRenameDialog(conv);
@@ -2127,6 +2137,9 @@ export default function Home() {
                 e.preventDefault();
                 e.stopPropagation();
                 handleDeleteConversation();
+                // Close dialog immediately
+                setDeleteDialogOpen(false);
+                setConversationToDelete(null);
               }}
               type="button"
             >
