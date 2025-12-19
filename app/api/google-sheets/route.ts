@@ -253,7 +253,42 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "sync-conversations" && conversations) {
-      // Initialize Conversations sheet
+      // Helper function to format conversation content
+      const formatConversationContent = (conv: any): string => {
+        if (!conv.messages || !Array.isArray(conv.messages) || conv.messages.length === 0) {
+          return "No messages yet.";
+        }
+
+        // Sort messages by timestamp
+        const sortedMessages = [...conv.messages].sort((a: any, b: any) => {
+          const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return timeA - timeB;
+        });
+
+        // Format each message
+        const formattedMessages = sortedMessages.map((msg: any, index: number) => {
+          const timestamp = msg.timestamp 
+            ? new Date(msg.timestamp).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            : 'Unknown time';
+          
+          const sender = msg.accountName || msg.accountEmail || 'Unknown sender';
+          const sentStatus = msg.sent ? '✓ Sent' : '⏳ Pending';
+          const content = msg.content || '(No content)';
+          
+          return `[${index + 1}] ${sender} (${timestamp}) ${sentStatus}\n${content}`;
+        });
+
+        return formattedMessages.join('\n\n---\n\n');
+      };
+
+      // Initialize Conversations sheet with Email Content column
       await initializeSheet(sheets, currentSpreadsheetId, "Conversations", [
         "Conversation ID",
         "Name",
@@ -262,26 +297,9 @@ export async function POST(request: NextRequest) {
         "Message Count",
         "Email Subject",
         "Conversation Length",
+        "Email Content",
         "Created",
         "Last Updated",
-      ]);
-
-      // Initialize Messages sheet
-      await initializeSheet(sheets, currentSpreadsheetId, "Messages", [
-        "Message ID",
-        "Conversation ID",
-        "Conversation Name",
-        "Account ID",
-        "Account Name",
-        "Account Email",
-        "Content",
-        "Timestamp",
-        "Sent",
-        "Email Message ID",
-        "Cost (USD)",
-        "Tokens (Input)",
-        "Tokens (Output)",
-        "Tokens (Total)",
       ]);
 
       // Clear existing data
@@ -289,16 +307,13 @@ export async function POST(request: NextRequest) {
         spreadsheetId: currentSpreadsheetId,
         range: "Conversations!A2:Z1000",
       });
-      await sheets.spreadsheets.values.clear({
-        spreadsheetId: currentSpreadsheetId,
-        range: "Messages!A2:Z1000",
-      });
 
       // Prepare conversation data
       const conversationRows: any[] = [];
-      const messageRows: any[] = [];
 
       conversations.forEach((conv: any) => {
+        const formattedContent = formatConversationContent(conv);
+        
         conversationRows.push([
           conv.id || "",
           conv.name || "",
@@ -307,31 +322,10 @@ export async function POST(request: NextRequest) {
           conv.messages?.length || 0,
           conv.emailSubject || "",
           conv.conversationLength || "",
+          formattedContent,
           new Date().toISOString(),
           new Date().toISOString(),
         ]);
-
-        // Add messages
-        if (conv.messages && Array.isArray(conv.messages)) {
-          conv.messages.forEach((msg: any) => {
-            messageRows.push([
-              msg.id || "",
-              conv.id || "",
-              conv.name || "",
-              msg.accountId || "",
-              msg.accountName || "",
-              msg.accountEmail || "",
-              msg.content || "",
-              msg.timestamp ? new Date(msg.timestamp).toISOString() : "",
-              msg.sent ? "Yes" : "No",
-              msg.emailMessageId || "",
-              msg.cost || "",
-              msg.tokens?.input || "",
-              msg.tokens?.output || "",
-              msg.tokens?.total || "",
-            ]);
-          });
-        }
       });
 
       // Add conversation data
@@ -355,32 +349,11 @@ export async function POST(request: NextRequest) {
         console.log("No conversation rows to write");
       }
 
-      // Add message data
-      if (messageRows.length > 0) {
-        try {
-          console.log(`Writing ${messageRows.length} message rows to sheet "Messages"...`);
-          const msgUpdateResponse = await sheets.spreadsheets.values.update({
-            spreadsheetId: currentSpreadsheetId,
-            range: "Messages!A2",
-            valueInputOption: "RAW",
-            requestBody: {
-              values: messageRows,
-            },
-          });
-          console.log(`Successfully wrote ${messageRows.length} message rows. Updated cells:`, msgUpdateResponse.data.updatedCells);
-        } catch (writeError: any) {
-          console.error("Error writing message data:", writeError);
-          throw new Error(`Failed to write message data: ${writeError.message}`);
-        }
-      } else {
-        console.log("No message rows to write");
-      }
-
       return NextResponse.json({
         success: true,
         spreadsheetId: currentSpreadsheetId,
         spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${currentSpreadsheetId}`,
-        message: `Synced ${conversations.length} conversation(s) and ${messageRows.length} message(s) to Google Sheets`,
+        message: `Synced ${conversations.length} conversation(s) to Google Sheets`,
       });
     }
 
@@ -449,12 +422,12 @@ export async function POST(request: NextRequest) {
           console.error("Error loading accounts:", e.message);
         }
 
-        // Load conversations (simplified - just metadata)
+        // Load conversations (simplified - just metadata, Email Content column is at index 7)
         let conversationsData: any[] = [];
         try {
           const convResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: currentSpreadsheetId,
-            range: "Conversations!A2:I1000",
+            range: "Conversations!A2:J1000", // Updated range to include Email Content column
           });
           if (convResponse.data.values) {
             conversationsData = convResponse.data.values.map((row: any[]) => ({
@@ -464,6 +437,7 @@ export async function POST(request: NextRequest) {
               minDelayMinutes: 1, // Default values
               maxDelayMinutes: 5, // Default values
               conversationLength: parseInt(row[6]) || 6,
+              // Email Content is at row[7] but we don't need to load it back
               selectedAccount: null,
               otherAccounts: [],
               messages: [],
