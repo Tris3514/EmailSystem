@@ -927,18 +927,36 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-foreground">Email System</h1>
-          {googleSheetsId && (
-            <Button variant="outline" asChild type="button">
-              <a
-                href={`https://docs.google.com/spreadsheets/d/${googleSheetsId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Open Spreadsheet
-              </a>
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {googleSheetsId && (
+              <>
+                <Button
+                  onClick={() => syncToGoogleSheets("all")}
+                  disabled={syncingToSheets || (accounts.length === 0 && conversations.length === 0)}
+                  variant="outline"
+                  size="icon"
+                  type="button"
+                  title="Sync all to Google Sheets"
+                >
+                  {syncingToSheets ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button variant="outline" asChild type="button">
+                  <a
+                    href={`https://docs.google.com/spreadsheets/d/${googleSheetsId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open Spreadsheet
+                  </a>
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Main Tabs */}
@@ -1784,14 +1802,14 @@ export default function Home() {
       <Dialog open={newConversationDialogOpen} onOpenChange={setNewConversationDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Conversation</DialogTitle>
+            <DialogTitle>Subject</DialogTitle>
             <DialogDescription>
-              Enter a name for your new conversation.
+              Enter the Subject for the Email Chain
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="newConversationName">Conversation Name</Label>
+              <Label htmlFor="newConversationName">Subject</Label>
               <Input
                 id="newConversationName"
                 placeholder="e.g., Project Discussion, Team Meeting"
