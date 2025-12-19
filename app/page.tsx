@@ -16,7 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2 } from "lucide-react";
+import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 interface Message {
   id: string;
@@ -763,7 +764,21 @@ export default function Home() {
       backgroundSize: '20px 20px'
     }}>
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8 text-foreground">Email System</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-foreground">Email System</h1>
+          <div className="flex gap-2">
+            <Link href="/accounts">
+              <Button variant="outline" type="button">
+                Accounts
+              </Button>
+            </Link>
+            <Link href="/conversations">
+              <Button variant="outline" type="button">
+                Conversations
+              </Button>
+            </Link>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Column - Accounts & Settings */}
