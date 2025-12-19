@@ -10,11 +10,52 @@ const getSheetsClient = () => {
 
   const auth = new google.auth.GoogleAuth({
     credentials: JSON.parse(credentials),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive",
+    ],
   });
 
   return google.sheets({ version: "v4", auth });
 };
+
+// Get Drive client for sharing spreadsheets
+const getDriveClient = () => {
+  const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
+  if (!credentials) {
+    throw new Error("GOOGLE_SHEETS_CREDENTIALS environment variable is not set");
+  }
+
+  const auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(credentials),
+    scopes: ["https://www.googleapis.com/auth/drive"],
+  });
+
+  return google.drive({ version: "v3", auth });
+};
+
+// Share spreadsheet with service account
+async function shareSpreadsheetWithServiceAccount(spreadsheetId: string) {
+  try {
+    const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS!);
+    const serviceAccountEmail = credentials.client_email;
+
+    const drive = getDriveClient();
+    await drive.permissions.create({
+      fileId: spreadsheetId,
+      requestBody: {
+        role: "writer",
+        type: "user",
+        emailAddress: serviceAccountEmail,
+      },
+    });
+  } catch (error: any) {
+    // If permission already exists, that's fine
+    if (!error.message?.includes("already exists")) {
+      console.error("Error sharing spreadsheet:", error);
+    }
+  }
+}
 
 // Get or create spreadsheet
 async function getOrCreateSpreadsheet(sheets: any, spreadsheetId?: string) {
@@ -47,7 +88,12 @@ async function getOrCreateSpreadsheet(sheets: any, spreadsheetId?: string) {
     },
   });
 
-  return response.data.spreadsheetId!;
+  const newSpreadsheetId = response.data.spreadsheetId!;
+  
+  // Share the spreadsheet with the service account so it can write to it
+  await shareSpreadsheetWithServiceAccount(newSpreadsheetId);
+
+  return newSpreadsheetId;
 }
 
 // Initialize sheet headers

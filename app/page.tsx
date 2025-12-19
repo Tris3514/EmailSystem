@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink } from "lucide-react";
-import Link from "next/link";
 
 interface Message {
   id: string;
@@ -68,6 +67,7 @@ interface Conversation {
 
 const STORAGE_KEY_ACCOUNTS = "email-system-accounts";
 const STORAGE_KEY_CONVERSATIONS = "email-system-conversations";
+const STORAGE_KEY_GOOGLE_SHEETS_ID = "email-system-google-sheets-id";
 
 // Get API base URL - use environment variable or default to relative path
 // On Vercel, API routes are on the same domain, so use relative paths
@@ -137,10 +137,13 @@ export default function Home() {
   });
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [mainTab, setMainTab] = useState<"conversations" | "accounts" | "database">("conversations");
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [googleSheetsId, setGoogleSheetsId] = useState<string | null>(null);
+  const [syncingToSheets, setSyncingToSheets] = useState(false);
 
   // Save accounts to localStorage whenever they change
   useEffect(() => {
@@ -744,6 +747,61 @@ export default function Home() {
     setSuccess("Email configuration saved");
   };
 
+  const syncToGoogleSheets = async (syncType: "accounts" | "conversations" | "all" = "all") => {
+    setSyncingToSheets(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const payload: any = {
+        action: syncType === "all" ? "sync-all" : syncType === "accounts" ? "sync-accounts" : "sync-conversations",
+        spreadsheetId: googleSheetsId || undefined,
+      };
+
+      if (syncType === "accounts" || syncType === "all") {
+        payload.accounts = accounts;
+      }
+      if (syncType === "conversations" || syncType === "all") {
+        payload.conversations = conversations;
+      }
+
+      const response = await fetch(`${getApiUrl()}/api/google-sheets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to sync to Google Sheets");
+      }
+
+      // Save spreadsheet ID if we got a new one
+      if (data.spreadsheetId && data.spreadsheetId !== googleSheetsId) {
+        setGoogleSheetsId(data.spreadsheetId);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEY_GOOGLE_SHEETS_ID, data.spreadsheetId);
+        }
+      }
+
+      setSuccess(data.message || "Synced to Google Sheets successfully");
+    } catch (err: any) {
+      setError(err.message || "Failed to sync to Google Sheets");
+    } finally {
+      setSyncingToSheets(false);
+    }
+  };
+
+  const handleDeleteAccount = (accountId: string) => {
+    if (confirm("Are you sure you want to delete this account?")) {
+      setAccounts(accounts.filter(acc => acc.id !== accountId));
+      setSuccess("Account deleted");
+    }
+  };
+
   const toggleOtherAccount = (account: Account) => {
     updateActiveConversation(c => {
       const isSelected = c.otherAccounts.some(a => a.id === account.id);
@@ -766,115 +824,32 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-foreground">Email System</h1>
-          <div className="flex gap-2">
-            <Link href="/accounts">
-              <Button variant="outline" type="button">
-                Accounts
-              </Button>
-            </Link>
-            <Link href="/conversations">
-              <Button variant="outline" type="button">
-                Conversations
-              </Button>
-            </Link>
-          </div>
+          {googleSheetsId && (
+            <Button variant="outline" asChild type="button">
+              <a
+                href={`https://docs.google.com/spreadsheets/d/${googleSheetsId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open Spreadsheet
+              </a>
+            </Button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Column - Accounts & Settings */}
-          <div className="lg:col-span-1 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Accounts</CardTitle>
-                <CardDescription>Manage email accounts</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  {accounts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No accounts yet. Add one to get started.
-                    </p>
-                  ) : (
-                    accounts.map((account) => (
-                      <div
-                        key={account.id}
-                        className={`p-3 rounded-lg border cursor-pointer transition ${
-                          activeConv?.selectedAccount?.id === account.id
-                            ? "border-primary bg-primary/10"
-                            : "border-border hover:border-primary/50"
-                        }`}
-                        onClick={() => {
-                          if (activeConv) {
-                            updateActiveConversation(c => ({ ...c, selectedAccount: account }));
-                          }
-                        }}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="font-medium">{account.name}</div>
-                            <div className="text-sm text-muted-foreground">{account.email}</div>
-                            {account.personality && (
-                              <div className="text-xs text-muted-foreground mt-1">{account.personality}</div>
-                            )}
-                            {account.emailConfig ? (
-                              <div className="text-xs text-green-500 mt-1">✓ Email configured</div>
-                            ) : (
-                              <div className="text-xs text-yellow-500 mt-1">⚠ Email not configured</div>
-                            )}
-                          </div>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log("Edit account button clicked");
-                                openEditDialog(account);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log("Settings button clicked");
-                                openConfigDialog(account);
-                              }}
-                            >
-                              <Settings className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <button 
-                  className="w-full h-10 px-4 py-2 inline-flex items-center justify-center rounded-md border border-input bg-background text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                  type="button"
-                  onClick={() => {
-                    console.log("Add Account button clicked - native button");
-                    setDialogOpen(true);
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Account
-                </button>
-              </CardContent>
-            </Card>
-          </div>
+        {/* Main Tabs */}
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "conversations" | "accounts" | "database")} className="mb-6">
+          <TabsList>
+            <TabsTrigger value="conversations">Conversations</TabsTrigger>
+            <TabsTrigger value="accounts">Accounts</TabsTrigger>
+            <TabsTrigger value="database">Database</TabsTrigger>
+          </TabsList>
 
-          {/* Right Column - Conversations */}
-          <div className="lg:col-span-3 space-y-6">
-            <Card>
+          {/* Conversations Tab */}
+          <TabsContent value="conversations" className="mt-6">
+            <div className="space-y-6">
+              <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -1284,8 +1259,150 @@ export default function Home() {
                 )}
               </CardContent>
             </Card>
-          </div>
-        </div>
+            </div>
+          </TabsContent>
+
+          {/* Accounts Tab */}
+          <TabsContent value="accounts" className="mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Manage Accounts</CardTitle>
+                    <CardDescription>Create and manage email accounts for conversations</CardDescription>
+                  </div>
+                  <Button onClick={() => setDialogOpen(true)} type="button">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Account
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {accounts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground mb-4">No accounts yet. Add one to get started.</p>
+                    <Button onClick={() => setDialogOpen(true)} type="button">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Your First Account
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {accounts.map((account) => (
+                      <div
+                        key={account.id}
+                        className="p-4 rounded-lg border border-border hover:border-primary/50 transition"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-lg">{account.name}</div>
+                            <div className="text-sm text-muted-foreground">{account.email}</div>
+                            {account.personality && (
+                              <div className="text-xs text-muted-foreground mt-2">{account.personality}</div>
+                            )}
+                            {account.emailConfig ? (
+                              <div className="text-xs text-green-500 mt-2">✓ Email configured</div>
+                            ) : (
+                              <div className="text-xs text-yellow-500 mt-2">⚠ Email not configured</div>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" type="button" onClick={() => openEditDialog(account)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              type="button"
+                              onClick={() => openConfigDialog(account)}
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              type="button"
+                              onClick={() => handleDeleteAccount(account.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Database Tab */}
+          <TabsContent value="database" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Google Sheets Integration</CardTitle>
+                <CardDescription>Sync your accounts and conversations to Google Sheets</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => syncToGoogleSheets("all")}
+                      disabled={syncingToSheets || (accounts.length === 0 && conversations.length === 0)}
+                      variant="outline"
+                      type="button"
+                    >
+                      {syncingToSheets ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <Database className="mr-2 h-4 w-4" />
+                          Sync All to Google Sheets
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => syncToGoogleSheets("accounts")}
+                      disabled={syncingToSheets || accounts.length === 0}
+                      variant="outline"
+                      type="button"
+                    >
+                      <Database className="mr-2 h-4 w-4" />
+                      Sync Accounts Only
+                    </Button>
+                    <Button
+                      onClick={() => syncToGoogleSheets("conversations")}
+                      disabled={syncingToSheets || conversations.length === 0}
+                      variant="outline"
+                      type="button"
+                    >
+                      <Database className="mr-2 h-4 w-4" />
+                      Sync Conversations Only
+                    </Button>
+                  </div>
+                  {googleSheetsId && (
+                    <div className="text-sm text-muted-foreground">
+                      Spreadsheet ID: {googleSheetsId}
+                    </div>
+                  )}
+                  <div className="text-sm text-muted-foreground">
+                    <p>The spreadsheet will contain three sheets:</p>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li><strong>Accounts:</strong> All account information including email configuration</li>
+                      <li><strong>Conversations:</strong> Conversation metadata and settings</li>
+                      <li><strong>Messages:</strong> All messages with costs and token usage</li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Add Account Dialog */}
