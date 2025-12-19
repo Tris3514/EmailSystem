@@ -8,54 +8,24 @@ const getSheetsClient = () => {
     throw new Error("GOOGLE_SHEETS_CREDENTIALS environment variable is not set");
   }
 
+  let parsedCredentials;
+  try {
+    parsedCredentials = JSON.parse(credentials);
+  } catch (parseError) {
+    throw new Error(`Failed to parse GOOGLE_SHEETS_CREDENTIALS: ${parseError}. Make sure it's valid JSON.`);
+  }
+
+  if (!parsedCredentials.client_email || !parsedCredentials.private_key) {
+    throw new Error("GOOGLE_SHEETS_CREDENTIALS is missing required fields (client_email or private_key)");
+  }
+
   const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(credentials),
-    scopes: [
-      "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive",
-    ],
+    credentials: parsedCredentials,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 
   return google.sheets({ version: "v4", auth });
 };
-
-// Get Drive client for sharing spreadsheets
-const getDriveClient = () => {
-  const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
-  if (!credentials) {
-    throw new Error("GOOGLE_SHEETS_CREDENTIALS environment variable is not set");
-  }
-
-  const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(credentials),
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  });
-
-  return google.drive({ version: "v3", auth });
-};
-
-// Share spreadsheet with service account
-async function shareSpreadsheetWithServiceAccount(spreadsheetId: string) {
-  try {
-    const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS!);
-    const serviceAccountEmail = credentials.client_email;
-
-    const drive = getDriveClient();
-    await drive.permissions.create({
-      fileId: spreadsheetId,
-      requestBody: {
-        role: "writer",
-        type: "user",
-        emailAddress: serviceAccountEmail,
-      },
-    });
-  } catch (error: any) {
-    // If permission already exists, that's fine
-    if (!error.message?.includes("already exists")) {
-      console.error("Error sharing spreadsheet:", error);
-    }
-  }
-}
 
 // Get or create spreadsheet
 async function getOrCreateSpreadsheet(sheets: any, spreadsheetId?: string) {
@@ -90,9 +60,7 @@ async function getOrCreateSpreadsheet(sheets: any, spreadsheetId?: string) {
 
   const newSpreadsheetId = response.data.spreadsheetId!;
   
-  // Share the spreadsheet with the service account so it can write to it
-  await shareSpreadsheetWithServiceAccount(newSpreadsheetId);
-
+  // Service account already owns the spreadsheet it creates via Sheets API
   return newSpreadsheetId;
 }
 
@@ -138,8 +106,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sheets = getSheetsClient();
-    const currentSpreadsheetId = await getOrCreateSpreadsheet(sheets, spreadsheetId);
+    let sheets;
+    try {
+      sheets = getSheetsClient();
+    } catch (authError: any) {
+      console.error("Authentication error:", authError);
+      return NextResponse.json(
+        { error: `Authentication failed: ${authError.message}. Please check your GOOGLE_SHEETS_CREDENTIALS.` },
+        { status: 500 }
+      );
+    }
+
+    let currentSpreadsheetId;
+    try {
+      currentSpreadsheetId = await getOrCreateSpreadsheet(sheets, spreadsheetId);
+    } catch (spreadsheetError: any) {
+      console.error("Spreadsheet error:", spreadsheetError);
+      return NextResponse.json(
+        { error: `Failed to access spreadsheet: ${spreadsheetError.message}. Make sure the Google Sheets API is enabled in your Google Cloud project.` },
+        { status: 500 }
+      );
+    }
 
     if (action === "sync-accounts" && accounts) {
       // Initialize Accounts sheet
@@ -349,8 +336,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
     console.error("Google Sheets sync error:", error);
+    
+    // Provide more detailed error messages
+    let errorMessage = error.message || "Failed to sync to Google Sheets";
+    
+    if (error.message?.includes("PERMISSION_DENIED") || error.message?.includes("permission")) {
+      errorMessage = `Permission denied: ${error.message}. Make sure:\n1. Google Sheets API is enabled in your Google Cloud project\n2. The service account JSON credentials are correct\n3. The service account has the necessary permissions`;
+    } else if (error.message?.includes("not found") || error.message?.includes("NOT_FOUND")) {
+      errorMessage = `Spreadsheet not found: ${error.message}. The spreadsheet may have been deleted or the ID is incorrect.`;
+    } else if (error.message?.includes("UNAUTHENTICATED") || error.message?.includes("authentication")) {
+      errorMessage = `Authentication failed: ${error.message}. Please check your GOOGLE_SHEETS_CREDENTIALS environment variable.`;
+    }
+    
     return NextResponse.json(
-      { error: error.message || "Failed to sync to Google Sheets" },
+      { error: errorMessage },
       { status: 500 }
     );
   }
