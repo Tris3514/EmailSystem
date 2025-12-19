@@ -163,24 +163,38 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "sync-accounts" && accounts) {
+      console.log(`Starting sync-accounts with ${accounts.length} accounts`);
+      
       // Initialize Accounts sheet
-      await initializeSheet(sheets, currentSpreadsheetId, "Accounts", [
-        "ID",
-        "Name",
-        "Email",
-        "Personality",
-        "SMTP Host",
-        "SMTP Port",
-        "SMTP User",
-        "Email Configured",
-        "Last Updated",
-      ]);
+      try {
+        await initializeSheet(sheets, currentSpreadsheetId, "Accounts", [
+          "ID",
+          "Name",
+          "Email",
+          "Personality",
+          "SMTP Host",
+          "SMTP Port",
+          "SMTP User",
+          "Email Configured",
+          "Last Updated",
+        ]);
+        console.log("Accounts sheet initialized");
+      } catch (initError: any) {
+        console.error("Error initializing Accounts sheet:", initError);
+        throw new Error(`Failed to initialize Accounts sheet: ${initError.message}`);
+      }
 
       // Clear existing data (except headers)
-      await sheets.spreadsheets.values.clear({
-        spreadsheetId: currentSpreadsheetId,
-        range: "Accounts!A2:Z1000",
-      });
+      try {
+        await sheets.spreadsheets.values.clear({
+          spreadsheetId: currentSpreadsheetId,
+          range: "Accounts!A2:Z1000",
+        });
+        console.log("Cleared existing account data");
+      } catch (clearError: any) {
+        console.error("Error clearing account data:", clearError);
+        // Continue anyway - might be empty already
+      }
 
       // Prepare account data
       const accountRows = accounts.map((acc: any) => [
@@ -195,18 +209,25 @@ export async function POST(request: NextRequest) {
         new Date().toISOString(),
       ]);
 
+      console.log(`Prepared ${accountRows.length} account rows:`, accountRows);
+
       // Add account data
       if (accountRows.length > 0) {
-        console.log(`Writing ${accountRows.length} account rows to sheet "Accounts"...`);
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: currentSpreadsheetId,
-          range: "Accounts!A2",
-          valueInputOption: "RAW",
-          requestBody: {
-            values: accountRows,
-          },
-        });
-        console.log(`Successfully wrote ${accountRows.length} account rows`);
+        try {
+          console.log(`Writing ${accountRows.length} account rows to sheet "Accounts"...`);
+          const updateResponse = await sheets.spreadsheets.values.update({
+            spreadsheetId: currentSpreadsheetId,
+            range: "Accounts!A2",
+            valueInputOption: "RAW",
+            requestBody: {
+              values: accountRows,
+            },
+          });
+          console.log(`Successfully wrote ${accountRows.length} account rows. Updated cells:`, updateResponse.data.updatedCells);
+        } catch (writeError: any) {
+          console.error("Error writing account data:", writeError);
+          throw new Error(`Failed to write account data: ${writeError.message}`);
+        }
       } else {
         console.log("No account rows to write");
       }
@@ -307,32 +328,42 @@ export async function POST(request: NextRequest) {
 
       // Add conversation data
       if (conversationRows.length > 0) {
-        console.log(`Writing ${conversationRows.length} conversation rows to sheet "Conversations"...`);
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: currentSpreadsheetId,
-          range: "Conversations!A2",
-          valueInputOption: "RAW",
-          requestBody: {
-            values: conversationRows,
-          },
-        });
-        console.log(`Successfully wrote ${conversationRows.length} conversation rows`);
+        try {
+          console.log(`Writing ${conversationRows.length} conversation rows to sheet "Conversations"...`);
+          const convUpdateResponse = await sheets.spreadsheets.values.update({
+            spreadsheetId: currentSpreadsheetId,
+            range: "Conversations!A2",
+            valueInputOption: "RAW",
+            requestBody: {
+              values: conversationRows,
+            },
+          });
+          console.log(`Successfully wrote ${conversationRows.length} conversation rows. Updated cells:`, convUpdateResponse.data.updatedCells);
+        } catch (writeError: any) {
+          console.error("Error writing conversation data:", writeError);
+          throw new Error(`Failed to write conversation data: ${writeError.message}`);
+        }
       } else {
         console.log("No conversation rows to write");
       }
 
       // Add message data
       if (messageRows.length > 0) {
-        console.log(`Writing ${messageRows.length} message rows to sheet "Messages"...`);
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: currentSpreadsheetId,
-          range: "Messages!A2",
-          valueInputOption: "RAW",
-          requestBody: {
-            values: messageRows,
-          },
-        });
-        console.log(`Successfully wrote ${messageRows.length} message rows`);
+        try {
+          console.log(`Writing ${messageRows.length} message rows to sheet "Messages"...`);
+          const msgUpdateResponse = await sheets.spreadsheets.values.update({
+            spreadsheetId: currentSpreadsheetId,
+            range: "Messages!A2",
+            valueInputOption: "RAW",
+            requestBody: {
+              values: messageRows,
+            },
+          });
+          console.log(`Successfully wrote ${messageRows.length} message rows. Updated cells:`, msgUpdateResponse.data.updatedCells);
+        } catch (writeError: any) {
+          console.error("Error writing message data:", writeError);
+          throw new Error(`Failed to write message data: ${writeError.message}`);
+        }
       } else {
         console.log("No message rows to write");
       }

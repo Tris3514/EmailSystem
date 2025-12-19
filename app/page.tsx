@@ -144,6 +144,7 @@ export default function Home() {
   const [success, setSuccess] = useState<string | null>(null);
   const [googleSheetsId, setGoogleSheetsId] = useState<string | null>(null);
   const [syncingToSheets, setSyncingToSheets] = useState(false);
+  const [loadingFromSheets, setLoadingFromSheets] = useState(false);
 
   // Save accounts to localStorage whenever they change
   useEffect(() => {
@@ -158,6 +159,58 @@ export default function Home() {
       localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(conversations));
     }
   }, [conversations]);
+
+  // Set persistent spreadsheet ID on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const persistentId = "1g58SNJO1b6o7v8IVq1UizeJZG1PaaP5oXtnrE06kVlQ";
+      setGoogleSheetsId(persistentId);
+      localStorage.setItem(STORAGE_KEY_GOOGLE_SHEETS_ID, persistentId);
+    }
+  }, []);
+
+  // Load data from Google Sheets on mount if localStorage is empty
+  useEffect(() => {
+    const loadFromSheets = async () => {
+      // Only load if we have no accounts or conversations
+      if (accounts.length === 0 && conversations.length === 0) {
+        setLoadingFromSheets(true);
+        try {
+          console.log("Loading data from Google Sheets...");
+          const response = await fetch(`${getApiUrl()}/api/google-sheets`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ action: "load-data" }),
+          });
+
+          const data = await response.json();
+          if (data.success) {
+            if (data.accounts?.length > 0) {
+              console.log(`Loaded ${data.accounts.length} accounts from Google Sheets`);
+              setAccounts(data.accounts);
+            }
+            if (data.conversations?.length > 0) {
+              console.log(`Loaded ${data.conversations.length} conversations from Google Sheets`);
+              setConversations(data.conversations);
+            }
+            if (data.accounts?.length > 0 || data.conversations?.length > 0) {
+              setSuccess(`Loaded ${data.accounts?.length || 0} account(s) and ${data.conversations?.length || 0} conversation(s) from Google Sheets`);
+            }
+          }
+        } catch (err: any) {
+          // Silently fail - user might not have data in sheets yet
+          console.log("Could not load data from Google Sheets:", err);
+        } finally {
+          setLoadingFromSheets(false);
+        }
+      }
+    };
+
+    loadFromSheets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
   
   // Add account dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -759,10 +812,14 @@ export default function Home() {
 
       if (syncType === "accounts" || syncType === "all") {
         payload.accounts = accounts;
+        console.log(`Syncing ${accounts.length} accounts to Google Sheets`);
       }
       if (syncType === "conversations" || syncType === "all") {
         payload.conversations = conversations;
+        console.log(`Syncing ${conversations.length} conversations to Google Sheets`);
       }
+
+      console.log("Sending sync request:", { action: payload.action, accountsCount: payload.accounts?.length, conversationsCount: payload.conversations?.length });
 
       const response = await fetch(`${getApiUrl()}/api/google-sheets`, {
         method: "POST",
@@ -773,8 +830,10 @@ export default function Home() {
       });
 
       const data = await response.json();
+      console.log("Sync response:", data);
 
       if (!response.ok) {
+        console.error("Sync failed:", data.error);
         throw new Error(data.error || "Failed to sync to Google Sheets");
       }
 
@@ -787,11 +846,54 @@ export default function Home() {
         }
       }
 
+      console.log("Sync successful:", data.message);
       setSuccess(data.message || "Synced to Google Sheets successfully");
     } catch (err: any) {
+      console.error("Sync error:", err);
       setError(err.message || "Failed to sync to Google Sheets");
     } finally {
       setSyncingToSheets(false);
+    }
+  };
+
+  const loadFromGoogleSheets = async () => {
+    setLoadingFromSheets(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      console.log("Loading data from Google Sheets...");
+      const response = await fetch(`${getApiUrl()}/api/google-sheets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "load-data" }),
+      });
+
+      const data = await response.json();
+      console.log("Load response:", data);
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load from Google Sheets");
+      }
+
+      if (data.success) {
+        if (data.accounts?.length > 0) {
+          setAccounts(data.accounts);
+          console.log(`Loaded ${data.accounts.length} accounts`);
+        }
+        if (data.conversations?.length > 0) {
+          setConversations(data.conversations);
+          console.log(`Loaded ${data.conversations.length} conversations`);
+        }
+        setSuccess(data.message || `Loaded ${data.accounts?.length || 0} account(s) and ${data.conversations?.length || 0} conversation(s) from Google Sheets`);
+      }
+    } catch (err: any) {
+      console.error("Load error:", err);
+      setError(err.message || "Failed to load from Google Sheets");
+    } finally {
+      setLoadingFromSheets(false);
     }
   };
 
