@@ -304,6 +304,28 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  // Helper function to format countdown
+  const getCountdown = useCallback((scheduledTime: Date | undefined): string | null => {
+    if (!scheduledTime) return null;
+    const now = currentTime.getTime();
+    const scheduled = scheduledTime.getTime();
+    const diff = scheduled - now;
+    
+    // If scheduled time has passed (more than 5 seconds ago), don't show countdown
+    // This handles cases where scheduled time was set but message wasn't sent
+    if (diff <= -5000) return null;
+    
+    if (diff <= 0) return "Sending...";
+    
+    const minutes = Math.floor(diff / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  }, [currentTime]);
+
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordInput === APP_PASSWORD) {
@@ -368,28 +390,6 @@ export default function Home() {
       </div>
     );
   }
-
-  // Helper function to format countdown
-  const getCountdown = useCallback((scheduledTime: Date | undefined): string | null => {
-    if (!scheduledTime) return null;
-    const now = currentTime.getTime();
-    const scheduled = scheduledTime.getTime();
-    const diff = scheduled - now;
-    
-    // If scheduled time has passed (more than 5 seconds ago), don't show countdown
-    // This handles cases where scheduled time was set but message wasn't sent
-    if (diff <= -5000) return null;
-    
-    if (diff <= 0) return "Sending...";
-    
-    const minutes = Math.floor(diff / 60000);
-    const seconds = Math.floor((diff % 60000) / 1000);
-    
-    if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    }
-    return `${seconds}s`;
-  }, [currentTime]);
 
   const getActiveConversation = (): Conversation | null => {
     if (!activeConversationId) return null;
