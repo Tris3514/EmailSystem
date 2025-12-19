@@ -237,6 +237,60 @@ export default function Home() {
     }
   }, [success]);
 
+  // Add account dialog
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [newAccountPersonality, setNewAccountPersonality] = useState("");
+  
+  // Edit account dialog
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editAccountId, setEditAccountId] = useState<string | null>(null);
+  const [editAccountName, setEditAccountName] = useState("");
+  const [editAccountEmail, setEditAccountEmail] = useState("");
+  const [editAccountPersonality, setEditAccountPersonality] = useState("");
+  
+  // Email config dialog
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [configAccountId, setConfigAccountId] = useState<string | null>(null);
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpSecure, setSmtpSecure] = useState(false);
+  
+  // New conversation name dialog
+  const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
+  const [newConversationName, setNewConversationName] = useState("");
+  
+  // Rename conversation dialog
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameConversationId, setRenameConversationId] = useState<string | null>(null);
+  const [renameConversationName, setRenameConversationName] = useState("");
+
+  // Participant search state (per conversation)
+  const [participantSearchQueries, setParticipantSearchQueries] = useState<Record<string, string>>({});
+
+  // Dropdown menu state (per conversation)
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Delete conversation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+
+  // Countdown timer state for scheduled messages
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every second for countdown timers
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordInput === APP_PASSWORD) {
@@ -292,60 +346,6 @@ export default function Home() {
       </div>
     );
   }
-
-  // Add account dialog
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [newAccountName, setNewAccountName] = useState("");
-  const [newAccountEmail, setNewAccountEmail] = useState("");
-  const [newAccountPersonality, setNewAccountPersonality] = useState("");
-  
-  // Edit account dialog
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editAccountId, setEditAccountId] = useState<string | null>(null);
-  const [editAccountName, setEditAccountName] = useState("");
-  const [editAccountEmail, setEditAccountEmail] = useState("");
-  const [editAccountPersonality, setEditAccountPersonality] = useState("");
-  
-  // Email config dialog
-  const [configDialogOpen, setConfigDialogOpen] = useState(false);
-  const [configAccountId, setConfigAccountId] = useState<string | null>(null);
-  const [smtpHost, setSmtpHost] = useState("");
-  const [smtpPort, setSmtpPort] = useState("587");
-  const [smtpUser, setSmtpUser] = useState("");
-  const [smtpPassword, setSmtpPassword] = useState("");
-  const [smtpSecure, setSmtpSecure] = useState(false);
-  
-  // New conversation name dialog
-  const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
-  const [newConversationName, setNewConversationName] = useState("");
-  
-  // Rename conversation dialog
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [renameConversationId, setRenameConversationId] = useState<string | null>(null);
-  const [renameConversationName, setRenameConversationName] = useState("");
-
-  // Participant search state (per conversation)
-  const [participantSearchQueries, setParticipantSearchQueries] = useState<Record<string, string>>({});
-
-  // Dropdown menu state (per conversation)
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
-  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  // Delete conversation dialog state
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
-
-  // Countdown timer state for scheduled messages
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  // Update current time every second for countdown timers
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Helper function to format countdown
   const getCountdown = useCallback((scheduledTime: Date | undefined): string | null => {
