@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical } from "lucide-react";
+import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical, LogOut } from "lucide-react";
 
 interface Message {
   id: string;
@@ -68,6 +68,10 @@ interface Conversation {
 const STORAGE_KEY_ACCOUNTS = "email-system-accounts";
 const STORAGE_KEY_CONVERSATIONS = "email-system-conversations";
 const STORAGE_KEY_GOOGLE_SHEETS_ID = "email-system-google-sheets-id";
+const STORAGE_KEY_AUTHENTICATED = "email-system-authenticated";
+
+// Password - can be set via environment variable or use default
+const APP_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || "password123";
 
 // Get API base URL - use environment variable or default to relative path
 // On Vercel, API routes are on the same domain, so use relative paths
@@ -78,6 +82,73 @@ const getApiUrl = () => {
 };
 
 export default function Home() {
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const authStatus = localStorage.getItem(STORAGE_KEY_AUTHENTICATED);
+      return authStatus === "true";
+    }
+    return false;
+  });
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === APP_PASSWORD) {
+      setIsAuthenticated(true);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(STORAGE_KEY_AUTHENTICATED, "true");
+      }
+      setPasswordError(null);
+      setPasswordInput("");
+    } else {
+      setPasswordError("Incorrect password. Please try again.");
+      setPasswordInput("");
+    }
+  };
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl text-center">Email System</CardTitle>
+            <CardDescription className="text-center">
+              Enter password to access
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setPasswordError(null);
+                  }}
+                  placeholder="Enter password"
+                  autoFocus
+                  className={passwordError ? "border-destructive" : ""}
+                />
+                {passwordError && (
+                  <p className="text-sm text-destructive">{passwordError}</p>
+                )}
+              </div>
+              <Button type="submit" className="w-full">
+                Access
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Load accounts from localStorage on mount
   const [accounts, setAccounts] = useState<Account[]>(() => {
     if (typeof window !== "undefined") {
@@ -1027,6 +1098,20 @@ export default function Home() {
                 </Button>
               </>
             )}
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              onClick={() => {
+                setIsAuthenticated(false);
+                if (typeof window !== "undefined") {
+                  localStorage.removeItem(STORAGE_KEY_AUTHENTICATED);
+                }
+              }}
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 

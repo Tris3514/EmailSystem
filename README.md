@@ -22,6 +22,7 @@ This project is configured to deploy to Vercel, which supports full Next.js with
 4. Vercel will automatically detect Next.js
 5. Add environment variables:
    - `OPENAI_API_KEY` - Your OpenAI API key (required for message generation)
+   - `NEXT_PUBLIC_APP_PASSWORD` - Password to protect access to the application (optional, defaults to "password123")
 6. Click "Deploy"
 7. Your site will be live at: `https://your-project.vercel.app`
 
@@ -31,6 +32,7 @@ In your Vercel project settings:
 1. Go to Settings → Environment Variables
 2. Add:
    - `OPENAI_API_KEY` = your OpenAI API key
+   - `NEXT_PUBLIC_APP_PASSWORD` = your secure password (optional, defaults to "password123")
 3. Redeploy if needed for changes to take effect
 
 ### Step 3: Access Your Site
@@ -58,6 +60,7 @@ npm install
 2. Create a `.env.local` file:
 ```
 OPENAI_API_KEY=your_openai_api_key_here
+NEXT_PUBLIC_APP_PASSWORD=your_secure_password_here
 ```
 
 3. Run the development server:
@@ -71,6 +74,7 @@ npm run dev
 
 - `OPENAI_API_KEY` - Required for AI message generation
 - `NEXT_PUBLIC_API_URL` - API base URL (only needed for GitHub Pages deployment)
+- `NEXT_PUBLIC_APP_PASSWORD` - Password required to access the application (defaults to "password123" if not set)
 
 ## Project Structure
 
