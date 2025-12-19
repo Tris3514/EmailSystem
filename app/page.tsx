@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink } from "lucide-react";
+import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical } from "lucide-react";
 
 interface Message {
   id: string;
@@ -242,6 +242,16 @@ export default function Home() {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameConversationId, setRenameConversationId] = useState<string | null>(null);
   const [renameConversationName, setRenameConversationName] = useState("");
+
+  // Participant search state (per conversation)
+  const [participantSearchQueries, setParticipantSearchQueries] = useState<Record<string, string>>({});
+
+  // Dropdown menu state (per conversation)
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Delete conversation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
 
   // Countdown timer state for scheduled messages
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -917,6 +927,55 @@ export default function Home() {
     });
   };
 
+  const handleDeleteConversation = async () => {
+    if (!conversationToDelete) return;
+
+    try {
+      // Remove from local state
+      const remaining = conversations.filter(c => c.id !== conversationToDelete.id);
+      setConversations(remaining);
+      
+      // Update active conversation if needed
+      if (activeConversationId === conversationToDelete.id) {
+        setActiveConversationId(remaining.length > 0 ? remaining[0].id : null);
+      }
+
+      // Sync to Google Sheets
+      try {
+        const response = await fetch("/api/google-sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sync-all",
+            accounts: accounts,
+            conversations: remaining,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Failed to sync deletion to Google Sheets:", errorData);
+          // Don't show error to user - deletion succeeded locally
+        }
+      } catch (syncError) {
+        console.error("Error syncing deletion to Google Sheets:", syncError);
+        // Don't show error to user - deletion succeeded locally
+      }
+
+      setDeleteDialogOpen(false);
+      setConversationToDelete(null);
+      setSuccess(`Conversation "${conversationToDelete.name}" deleted successfully`);
+    } catch (error: any) {
+      setError(error.message || "Failed to delete conversation");
+    }
+  };
+
+  const openDeleteDialog = (conv: Conversation) => {
+    setConversationToDelete(conv);
+    setDeleteDialogOpen(true);
+    setOpenDropdownId(null); // Close dropdown
+  };
+
   const activeConv = getActiveConversation();
 
   return (
@@ -1008,45 +1067,104 @@ export default function Home() {
                     </Button>
                   </div>
                 ) : (
-                  <Tabs value={activeConversationId || undefined} onValueChange={setActiveConversationId}>
-                    <TabsList className="flex flex-wrap gap-2 mb-4">
-                      {conversations.map((conv) => (
-                        <TabsTrigger key={conv.id} value={conv.id} className="flex items-center gap-1">
-                          <span>{conv.name}</span>
-                          <button
-                            type="button"
-                            className="ml-1 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log("Rename conversation button clicked");
-                              openRenameDialog(conv);
-                            }}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            className="ml-1 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log("Close conversation button clicked");
-                              const remaining = conversations.filter(c => c.id !== conv.id);
-                              setConversations(remaining);
-                              if (activeConversationId === conv.id) {
-                                setActiveConversationId(remaining.length > 0 ? remaining[0].id : null);
-                              }
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
+                  <div className="flex gap-4 min-h-[600px]">
+                    {/* Left Sidebar - Conversations List */}
+                    <div className="w-64 border-r pr-4 flex-shrink-0">
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold mb-3">Conversations</h3>
+                        <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-400px)]">
+                          {conversations.map((conv) => (
+                            <div
+                              key={conv.id}
+                              className={`group relative flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                                activeConversationId === conv.id
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "hover:bg-muted border-border"
+                              }`}
+                              onClick={() => setActiveConversationId(conv.id)}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className={`text-sm font-medium truncate ${
+                                  activeConversationId === conv.id ? "text-primary-foreground" : ""
+                                }`}>
+                                  {conv.name}
+                                </div>
+                                <div className={`text-xs truncate ${
+                                  activeConversationId === conv.id ? "text-primary-foreground/80" : "text-muted-foreground"
+                                }`}>
+                                  {conv.messages.length} message{conv.messages.length !== 1 ? "s" : ""}
+                                </div>
+                              </div>
+                              <div className="relative ml-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  type="button"
+                                  className={`h-6 w-6 p-0 ${
+                                    activeConversationId === conv.id
+                                      ? "text-primary-foreground hover:bg-primary-foreground/20"
+                                      : "opacity-0 group-hover:opacity-100"
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDropdownId(openDropdownId === conv.id ? null : conv.id);
+                                  }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                                {openDropdownId === conv.id && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-10"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenDropdownId(null);
+                                      }}
+                                    />
+                                    <div className="absolute right-0 top-8 z-20 w-48 bg-background border border-border rounded-md shadow-lg">
+                                      <div className="py-1">
+                                        <button
+                                          type="button"
+                                          className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openRenameDialog(conv);
+                                            setOpenDropdownId(null);
+                                          }}
+                                        >
+                                          <Pencil className="h-4 w-4" />
+                                          Rename
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="w-full text-left px-4 py-2 text-sm hover:bg-muted text-destructive flex items-center gap-2"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openDeleteDialog(conv);
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
 
-                    {conversations.map((conv) => (
-                      <TabsContent key={conv.id} value={conv.id} className="space-y-6">
+                    {/* Main Content Area */}
+                    <div className="flex-1 overflow-y-auto">
+                      {activeConversationId && (() => {
+                        const conv = conversations.find(c => c.id === activeConversationId);
+                        if (!conv) return null;
+                        
+                        return (
+                          <div key={conv.id} className="space-y-6">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                           {/* Participants */}
                           <div className="space-y-4">
@@ -1058,51 +1176,96 @@ export default function Home() {
                               <CardContent className="space-y-4">
                                 <div className="space-y-2">
                                   <Label>All Participants</Label>
-                                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                                    {accounts.length === 0 ? (
-                                      <p className="text-sm text-muted-foreground">No accounts available</p>
-                                    ) : (
-                                      accounts.map((account) => {
-                                        const isParticipant = conv.selectedAccount?.id === account.id || 
-                                                             conv.otherAccounts.some(a => a.id === account.id);
+                                  {/* Search Bar */}
+                                  <div className="relative">
+                                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                      placeholder="Search by name or email..."
+                                      value={participantSearchQueries[conv.id] || ""}
+                                      onChange={(e) => {
+                                        setParticipantSearchQueries(prev => ({
+                                          ...prev,
+                                          [conv.id]: e.target.value
+                                        }));
+                                      }}
+                                      className="pl-8"
+                                    />
+                                  </div>
+                                  {/* Accounts List */}
+                                  <div className="border rounded-md">
+                                    <div className="max-h-[300px] overflow-y-auto">
+                                      {accounts.length === 0 ? (
+                                        <div className="p-4 text-center">
+                                          <p className="text-sm text-muted-foreground">No accounts available</p>
+                                        </div>
+                                      ) : (() => {
+                                        const searchQuery = (participantSearchQueries[conv.id] || "").toLowerCase().trim();
+                                        const filteredAccounts = searchQuery
+                                          ? accounts.filter(account => 
+                                              account.name.toLowerCase().includes(searchQuery) ||
+                                              account.email.toLowerCase().includes(searchQuery)
+                                            )
+                                          : accounts;
+                                        
+                                        if (filteredAccounts.length === 0) {
+                                          return (
+                                            <div className="p-4 text-center">
+                                              <p className="text-sm text-muted-foreground">No accounts found</p>
+                                            </div>
+                                          );
+                                        }
+
                                         return (
-                                          <div key={account.id} className="flex items-center justify-between p-2 rounded border border-border">
-                                            <span className="text-sm">{account.name}</span>
-                                            {isParticipant ? (
-                                              <Button
-                                                size="sm"
-                                                variant="destructive"
-                                                type="button"
-                                                onClick={() => {
-                                                  if (conv.selectedAccount?.id === account.id) {
-                                                    updateActiveConversation(c => ({ ...c, selectedAccount: null }));
-                                                  } else {
-                                                    toggleOtherAccount(account);
-                                                  }
-                                                }}
-                                              >
-                                                <X className="h-3 w-3" />
-                                              </Button>
-                                            ) : (
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                type="button"
-                                                onClick={() => {
-                                                  if (!conv.selectedAccount) {
-                                                    updateActiveConversation(c => ({ ...c, selectedAccount: account }));
-                                                  } else {
-                                                    toggleOtherAccount(account);
-                                                  }
-                                                }}
-                                              >
-                                                <Plus className="h-3 w-3" />
-                                              </Button>
-                                            )}
+                                          <div className="divide-y">
+                                            {filteredAccounts.map((account) => {
+                                              const isParticipant = conv.selectedAccount?.id === account.id || 
+                                                                   conv.otherAccounts.some(a => a.id === account.id);
+                                              return (
+                                                <div key={account.id} className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
+                                                  <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium truncate">{account.name}</div>
+                                                    <div className="text-xs text-muted-foreground truncate">{account.email}</div>
+                                                  </div>
+                                                  {isParticipant ? (
+                                                    <Button
+                                                      size="sm"
+                                                      variant="destructive"
+                                                      type="button"
+                                                      className="ml-2 shrink-0"
+                                                      onClick={() => {
+                                                        if (conv.selectedAccount?.id === account.id) {
+                                                          updateActiveConversation(c => ({ ...c, selectedAccount: null }));
+                                                        } else {
+                                                          toggleOtherAccount(account);
+                                                        }
+                                                      }}
+                                                    >
+                                                      <X className="h-3 w-3" />
+                                                    </Button>
+                                                  ) : (
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      type="button"
+                                                      className="ml-2 shrink-0"
+                                                      onClick={() => {
+                                                        if (!conv.selectedAccount) {
+                                                          updateActiveConversation(c => ({ ...c, selectedAccount: account }));
+                                                        } else {
+                                                          toggleOtherAccount(account);
+                                                        }
+                                                      }}
+                                                    >
+                                                      <Plus className="h-3 w-3" />
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
                                         );
-                                      })
-                                    )}
+                                      })()}
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="pt-2 border-t">
@@ -1374,9 +1537,16 @@ export default function Home() {
                             </Card>
                           </div>
                         </div>
-                      </TabsContent>
-                    ))}
-                  </Tabs>
+                          </div>
+                        );
+                      })()}
+                      {!activeConversationId && (
+                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                          Select a conversation to view details
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1902,6 +2072,40 @@ export default function Home() {
               type="button"
             >
               Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Conversation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you sure you want to delete conversation {conversationToDelete?.name}?</DialogTitle>
+            <DialogDescription>
+              {conversationToDelete?.name} will be removed from the list and database permanently.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setConversationToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDeleteConversation();
+              }}
+              type="button"
+            >
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
