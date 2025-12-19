@@ -747,7 +747,7 @@ export default function Home() {
     setSuccess("Email configuration saved");
   };
 
-  const syncToGoogleSheets = async (syncType: "accounts" | "conversations" | "all" = "all", forceNew = false) => {
+  const syncToGoogleSheets = async (syncType: "accounts" | "conversations" | "all" = "all") => {
     setSyncingToSheets(true);
     setError(null);
     setSuccess(null);
@@ -755,8 +755,6 @@ export default function Home() {
     try {
       const payload: any = {
         action: syncType === "all" ? "sync-all" : syncType === "accounts" ? "sync-accounts" : "sync-conversations",
-        // If forceNew is true, don't send spreadsheetId to force creation of a new one
-        spreadsheetId: forceNew ? undefined : (googleSheetsId || undefined),
       };
 
       if (syncType === "accounts" || syncType === "all") {
@@ -784,11 +782,12 @@ export default function Home() {
         throw new Error(data.error || "Failed to sync to Google Sheets");
       }
 
-      // Save spreadsheet ID if we got a new one
-      if (data.spreadsheetId && data.spreadsheetId !== googleSheetsId) {
-        setGoogleSheetsId(data.spreadsheetId);
+      // Store the persistent spreadsheet ID
+      const persistentSpreadsheetId = "1g58SNJO1b6o7v8IVq1UizeJZG1PaaP5oXtnrE06kVlQ";
+      if (data.spreadsheetId && data.spreadsheetId === persistentSpreadsheetId) {
+        setGoogleSheetsId(persistentSpreadsheetId);
         if (typeof window !== "undefined") {
-          localStorage.setItem(STORAGE_KEY_GOOGLE_SHEETS_ID, data.spreadsheetId);
+          localStorage.setItem(STORAGE_KEY_GOOGLE_SHEETS_ID, persistentSpreadsheetId);
         }
       }
 
