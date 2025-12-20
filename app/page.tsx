@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical, LogOut } from "lucide-react";
+import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical, LogOut, Menu } from "lucide-react";
 
 interface Message {
   id: string;
@@ -96,6 +96,10 @@ export default function Home() {
   // Transition animation state
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [showMainApp, setShowMainApp] = useState(false);
+  
+  // Mobile layout state
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Check authentication status after mount (client-side only)
   useEffect(() => {
@@ -139,6 +143,47 @@ export default function Home() {
       return () => clearInterval(typingInterval);
     }
   }, [isAuthenticated, isCheckingAuth]);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Theme management based on current tab/page
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const html = document.documentElement;
+    
+    // Remove all theme classes
+    html.classList.remove("theme-blue", "theme-orange", "theme-neutral");
+    
+    if (!isAuthenticated) {
+      // Password page - neutral theme
+      html.classList.add("theme-neutral");
+    } else {
+      // Apply theme based on current tab
+      switch (mainTab) {
+        case "conversations":
+          html.classList.add("theme-blue");
+          break;
+        case "accounts":
+          html.classList.add("theme-orange");
+          break;
+        case "database":
+          html.classList.add("theme-neutral");
+          break;
+        default:
+          html.classList.add("theme-neutral");
+      }
+    }
+  }, [isAuthenticated, mainTab]);
 
   // Load accounts from localStorage on mount
   const [accounts, setAccounts] = useState<Account[]>(() => {
@@ -1178,40 +1223,59 @@ export default function Home() {
   const activeConv = getActiveConversation();
 
   return (
-    <div className={`min-h-screen bg-black p-8 ${showMainApp ? "animate-slide-fade-in" : "opacity-0"}`} style={{
-      backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px)',
-      backgroundSize: '20px 20px'
-    }}>
+    <div className={`min-h-screen bg-background p-4 md:p-8 ${showMainApp ? "animate-slide-fade-in" : "opacity-0"} overflow-x-hidden`}>
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Email System</h1>
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 md:mb-8">
+          <div className="flex items-center justify-between md:justify-start gap-4">
+            {isMobile && mainTab === "conversations" && (
+              <Button
+                variant="outline"
+                size="icon"
+                type="button"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="shrink-0"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            )}
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Email System</h1>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             {googleSheetsId && (
               <>
                 <Button
                   onClick={() => syncToGoogleSheets("all")}
                   disabled={syncingToSheets || (accounts.length === 0 && conversations.length === 0)}
                   variant="outline"
-                  size="icon"
+                  size={isMobile ? "sm" : "icon"}
                   type="button"
                   title="Sync all to Google Sheets"
+                  className={isMobile ? "text-xs" : ""}
                 >
                   {syncingToSheets ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      {isMobile && <span className="mr-2">Syncing</span>}
+                      <Loader2 className={`h-4 w-4 ${isMobile ? "" : "animate-spin"}`} />
+                    </>
                   ) : (
-                    <Database className="h-4 w-4" />
+                    <>
+                      {isMobile && <span className="mr-2">Sync</span>}
+                      <Database className="h-4 w-4" />
+                    </>
                   )}
                 </Button>
-                <Button variant="outline" asChild type="button">
-                  <a
-                    href={`https://docs.google.com/spreadsheets/d/${googleSheetsId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Open Spreadsheet
-                  </a>
-                </Button>
+                {!isMobile && (
+                  <Button variant="outline" asChild type="button">
+                    <a
+                      href={`https://docs.google.com/spreadsheets/d/${googleSheetsId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Open Spreadsheet
+                    </a>
+                  </Button>
+                )}
               </>
             )}
             <Button
@@ -1234,25 +1298,25 @@ export default function Home() {
         </div>
 
         {/* Main Tabs */}
-        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "conversations" | "accounts" | "database")} className="mb-6">
-          <TabsList>
-            <TabsTrigger value="conversations">Conversations</TabsTrigger>
-            <TabsTrigger value="accounts">Accounts</TabsTrigger>
-            <TabsTrigger value="database">Database</TabsTrigger>
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "conversations" | "accounts" | "database")} className="mb-4 md:mb-6">
+          <TabsList className="w-full md:w-auto grid grid-cols-3 md:inline-flex">
+            <TabsTrigger value="conversations" className="text-xs md:text-sm">Conversations</TabsTrigger>
+            <TabsTrigger value="accounts" className="text-xs md:text-sm">Accounts</TabsTrigger>
+            <TabsTrigger value="database" className="text-xs md:text-sm">Database</TabsTrigger>
           </TabsList>
 
           {/* Conversations Tab */}
-          <TabsContent value="conversations" className="mt-6">
+          <TabsContent value="conversations" className="mt-4 md:mt-6">
             <div className="space-y-6">
               <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
-                    <CardTitle>Conversations</CardTitle>
-                    <CardDescription>Manage multiple conversations</CardDescription>
+                    <CardTitle className="text-lg md:text-xl">Conversations</CardTitle>
+                    <CardDescription className="text-sm">Manage multiple conversations</CardDescription>
                   </div>
                   <button 
-                    className="h-9 px-3 inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-medium ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                    className="h-9 px-3 inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-medium ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 w-full md:w-auto"
                     onClick={() => {
                       console.log("New Conversation button clicked - native button");
                       createNewConversation();
@@ -1282,9 +1346,90 @@ export default function Home() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex gap-4 min-h-[600px]">
-                    {/* Left Sidebar - Conversations List */}
-                    <div className="w-64 border-r pr-4 flex-shrink-0 flex flex-col">
+                  <>
+                    {/* Mobile Sidebar Drawer */}
+                    {isMobile && mobileSidebarOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                          onClick={() => setMobileSidebarOpen(false)}
+                        />
+                        <div className="fixed left-0 top-0 bottom-0 w-64 bg-background border-r z-50 md:hidden overflow-y-auto p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold">Conversations</h3>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              type="button"
+                              onClick={() => setMobileSidebarOpen(false)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="space-y-1">
+                            {conversations.map((conv) => (
+                              <div
+                                key={conv.id}
+                                className={`group relative flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                                  activeConversationId === conv.id
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "hover:bg-muted border-border"
+                                }`}
+                                onClick={() => {
+                                  setActiveConversationId(conv.id);
+                                  setMobileSidebarOpen(false);
+                                }}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className={`text-sm font-medium truncate ${
+                                    activeConversationId === conv.id ? "text-primary-foreground" : ""
+                                  }`}>
+                                    {conv.name}
+                                  </div>
+                                  <div className={`text-xs truncate ${
+                                    activeConversationId === conv.id ? "text-primary-foreground/80" : "text-muted-foreground"
+                                  }`}>
+                                    {conv.messages.length} message{conv.messages.length !== 1 ? "s" : ""}
+                                  </div>
+                                </div>
+                                <div className="relative ml-2 shrink-0">
+                                  <Button
+                                    ref={(el) => {
+                                      buttonRefs.current[conv.id] = el;
+                                    }}
+                                    size="sm"
+                                    variant="ghost"
+                                    type="button"
+                                    className={`h-6 w-6 p-0 ${
+                                      activeConversationId === conv.id
+                                        ? "text-primary-foreground hover:bg-primary-foreground/20"
+                                        : "opacity-0 group-hover:opacity-100"
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const button = buttonRefs.current[conv.id];
+                                      if (button) {
+                                        const rect = button.getBoundingClientRect();
+                                        setDropdownPosition({
+                                          top: rect.bottom + 4,
+                                          right: window.innerWidth - rect.right,
+                                        });
+                                      }
+                                      setOpenDropdownId(openDropdownId === conv.id ? null : conv.id);
+                                    }}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex flex-col md:flex-row gap-4 min-h-[400px] md:min-h-[600px]">
+                      {/* Left Sidebar - Conversations List (Desktop) */}
+                      <div className="hidden md:flex w-64 border-r pr-4 flex-shrink-0 flex flex-col">
                       <div className="mb-3">
                         <h3 className="text-sm font-semibold">Conversations</h3>
                       </div>
@@ -1394,22 +1539,23 @@ export default function Home() {
                         </div>
                       </div>
                     </div>
+                    </div>
 
                     {/* Main Content Area */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto min-h-0">
                       {activeConversationId && (() => {
                         const conv = conversations.find(c => c.id === activeConversationId);
                         if (!conv) return null;
                         
                         return (
-                          <div key={conv.id} className="space-y-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          <div key={conv.id} className="space-y-4 md:space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                           {/* Participants */}
                           <div className="space-y-4">
                             <Card>
                               <CardHeader>
-                                <CardTitle className="text-lg">Participants</CardTitle>
-                                <CardDescription>Add or remove participants from this conversation</CardDescription>
+                                <CardTitle className="text-base md:text-lg">Participants</CardTitle>
+                                <CardDescription className="text-xs md:text-sm">Add or remove participants from this conversation</CardDescription>
                               </CardHeader>
                               <CardContent className="space-y-4">
                                 <div className="space-y-2">
@@ -1574,15 +1720,15 @@ export default function Home() {
                           <div className="lg:col-span-2">
                             <Card>
                               <CardHeader>
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-4">
-                                    <CardTitle className="text-lg">Messages</CardTitle>
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
+                                  <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                                    <CardTitle className="text-base md:text-lg">Messages</CardTitle>
                                     {(() => {
                                       const totalCost = conv.messages.reduce((sum, msg) => sum + (msg.cost || 0), 0);
                                       const totalTokens = conv.messages.reduce((sum, msg) => sum + (msg.tokens?.total || 0), 0);
                                       if (totalCost > 0 || totalTokens > 0) {
                                         return (
-                                          <span className="text-sm text-muted-foreground">
+                                          <span className="text-xs md:text-sm text-muted-foreground">
                                             Total: ${totalCost.toFixed(4)} ({totalTokens.toLocaleString()} tokens)
                                           </span>
                                         );
@@ -1792,15 +1938,15 @@ export default function Home() {
           </TabsContent>
 
           {/* Accounts Tab */}
-          <TabsContent value="accounts" className="mt-6">
+          <TabsContent value="accounts" className="mt-4 md:mt-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
-                    <CardTitle>Manage Accounts</CardTitle>
-                    <CardDescription>Create and manage email accounts for conversations</CardDescription>
+                    <CardTitle className="text-lg md:text-xl">Manage Accounts</CardTitle>
+                    <CardDescription className="text-sm">Create and manage email accounts for conversations</CardDescription>
                   </div>
-                  <Button onClick={() => setDialogOpen(true)} type="button">
+                  <Button onClick={() => setDialogOpen(true)} type="button" className="w-full md:w-auto">
                     <Plus className="mr-2 h-4 w-4" />
                     Add Account
                   </Button>
@@ -1868,20 +2014,21 @@ export default function Home() {
           </TabsContent>
 
           {/* Database Tab */}
-          <TabsContent value="database" className="mt-6">
+          <TabsContent value="database" className="mt-4 md:mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Google Sheets Integration</CardTitle>
-                <CardDescription>Sync your accounts and conversations to Google Sheets</CardDescription>
+                <CardTitle className="text-lg md:text-xl">Google Sheets Integration</CardTitle>
+                <CardDescription className="text-sm">Sync your accounts and conversations to Google Sheets</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-4">
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col md:flex-row md:flex-wrap gap-2">
                     <Button
                       onClick={() => syncToGoogleSheets("all")}
                       disabled={syncingToSheets || (accounts.length === 0 && conversations.length === 0)}
                       variant="outline"
                       type="button"
+                      className="w-full md:w-auto"
                     >
                       {syncingToSheets ? (
                         <>
@@ -1900,6 +2047,7 @@ export default function Home() {
                       disabled={syncingToSheets || accounts.length === 0}
                       variant="outline"
                       type="button"
+                      className="w-full md:w-auto"
                     >
                       <Database className="mr-2 h-4 w-4" />
                       Sync Accounts Only
@@ -1909,6 +2057,7 @@ export default function Home() {
                       disabled={syncingToSheets || conversations.length === 0}
                       variant="outline"
                       type="button"
+                      className="w-full md:w-auto"
                     >
                       <Database className="mr-2 h-4 w-4" />
                       Sync Conversations Only
@@ -1918,6 +2067,7 @@ export default function Home() {
                       disabled={loadingFromSheets}
                       variant="secondary"
                       type="button"
+                      className="w-full md:w-auto"
                     >
                       {loadingFromSheets ? (
                         <>
