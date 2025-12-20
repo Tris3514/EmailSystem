@@ -9,6 +9,14 @@ const googleSansFlex = localFont({
   display: "swap",
 });
 
+const windowsCommandPrompt = localFont({
+  src: "./fonts/windows_command_prompt.ttf",
+  variable: "--font-windows-command-prompt",
+  className: "--font-windows-command-prompt-class",
+  display: "swap",
+  fallback: ['monospace'],
+});
+
 export const metadata: Metadata = {
   title: "Email System",
   description: "AI-powered email generation system",
@@ -21,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="dark">
-      <body className={`${googleSansFlex.variable} antialiased font-sans`}>
+      <body className={`${googleSansFlex.variable} ${windowsCommandPrompt.variable} antialiased font-sans`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

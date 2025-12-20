@@ -59,10 +59,32 @@
   }
   
   .dark body {
-    background-color: #000000;
-    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-    background-size: 20px 20px;
+    background: linear-gradient(-45deg, #000000, #050505, #0a0a0a, #020202);
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
   }
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@font-face {
+  font-family: 'Windows Command Prompt';
+  src: url('./fonts/windows_command_prompt.ttf') format('truetype');
+  font-display: swap;
+}
+
+.version-text {
+  font-family: 'Windows Command Prompt', 'Courier New', monospace;
 }
 
 @keyframes bounce-in {

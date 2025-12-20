@@ -458,51 +458,25 @@ export default function Home() {
   // Show login screen if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className={`min-h-screen flex items-center justify-center bg-background p-4 transition-opacity duration-600 ${
+      <div className={`min-h-screen flex items-center justify-center p-4 transition-opacity duration-600 ${
         isUnlocking ? "animate-fade-out" : ""
       }`}>
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">
-              <span className={isTypingComplete ? "animate-bounce-in inline-block" : "inline-block"}>
-                {displayedTitle}
-                {!isTypingComplete && <span className="animate-pulse ml-1">|</span>}
-              </span>
-            </CardTitle>
-            <CardDescription 
-              className={`text-center transition-opacity duration-500 ${
-                showSubtitle ? "opacity-100 animate-fade-in" : "opacity-0"
-              }`}
-            >
-              Enter password to access
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => {
-                    setPasswordInput(e.target.value);
-                    setPasswordError(null);
-                  }}
-                  placeholder="Enter password"
-                  autoFocus
-                  className={passwordError ? "border-destructive" : ""}
-                />
-                {passwordError && (
-                  <p className="text-sm text-destructive">{passwordError}</p>
-                )}
-              </div>
-              <Button type="submit" className="w-full">
-                Access
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <form onSubmit={handlePasswordSubmit} className="w-full max-w-md">
+          <Input
+            id="password"
+            type="password"
+            value={passwordInput}
+            onChange={(e) => {
+              setPasswordInput(e.target.value);
+              setPasswordError(null);
+            }}
+            autoFocus
+            className={`w-full ${passwordError ? "border-destructive" : ""}`}
+          />
+          {passwordError && (
+            <p className="text-sm text-destructive mt-2 text-center">{passwordError}</p>
+          )}
+        </form>
       </div>
     );
   }
@@ -1270,7 +1244,7 @@ export default function Home() {
   const activeConv = getActiveConversation();
 
   return (
-    <div className={`min-h-screen bg-background p-4 md:p-8 ${showMainApp ? "animate-slide-fade-in" : "opacity-0"} overflow-x-hidden`}>
+    <div className={`min-h-screen p-4 md:p-8 ${showMainApp ? "animate-slide-fade-in" : "opacity-0"} overflow-x-hidden`}>
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 md:mb-8">
           <div className="flex items-center justify-between md:justify-start gap-4">
@@ -2701,6 +2675,13 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Version text */}
+      {showMainApp && (
+        <div className="fixed bottom-4 right-4 text-xs text-muted-foreground version-text">
+          EmailSystem v0.12
+        </div>
+      )}
     </div>
   );
 }
