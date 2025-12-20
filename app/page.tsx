@@ -1931,6 +1931,7 @@ export default function Home() {
                       )}
                     </div>
                   </div>
+                  </>
                 )}
               </CardContent>
             </Card>
