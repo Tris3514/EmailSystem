@@ -12,7 +12,6 @@ const googleSansFlex = localFont({
 const windowsCommandPrompt = localFont({
   src: "./fonts/windows_command_prompt.ttf",
   variable: "--font-windows-command-prompt",
-  className: "--font-windows-command-prompt-class",
   display: "swap",
   fallback: ['monospace'],
 });

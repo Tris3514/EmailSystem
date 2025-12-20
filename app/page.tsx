@@ -2679,7 +2679,7 @@ export default function Home() {
       {/* Version text */}
       {showMainApp && (
         <div className="fixed bottom-4 right-4 text-xs text-muted-foreground version-text">
-          EmailSystem v0.12
+          EmailSystem v0.12.1
         </div>
       )}
     </div>
