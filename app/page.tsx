@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical, LogOut, Menu } from "lucide-react";
+import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical, LogOut, Menu, RefreshCw, HelpCircle } from "lucide-react";
 
 interface Message {
   id: string;
@@ -214,8 +214,9 @@ export default function Home() {
   });
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [mainTab, setMainTab] = useState<"conversations" | "accounts" | "database">("conversations");
+  const [mainTab, setMainTab] = useState<"conversations" | "accounts" | "settings">("conversations");
   const [loading, setLoading] = useState(false);
+  const [accountSearchQuery, setAccountSearchQuery] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -313,6 +314,9 @@ export default function Home() {
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountEmail, setNewAccountEmail] = useState("");
   const [newAccountPersonality, setNewAccountPersonality] = useState("");
+  const [newAccountSmtpHost, setNewAccountSmtpHost] = useState("");
+  const [newAccountSmtpPort, setNewAccountSmtpPort] = useState("587");
+  const [newAccountSmtpPassword, setNewAccountSmtpPassword] = useState("");
   
   // Edit account dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -326,7 +330,6 @@ export default function Home() {
   const [configAccountId, setConfigAccountId] = useState<string | null>(null);
   const [smtpHost, setSmtpHost] = useState("");
   const [smtpPort, setSmtpPort] = useState("587");
-  const [smtpUser, setSmtpUser] = useState("");
   const [smtpPassword, setSmtpPassword] = useState("");
   const [smtpSecure, setSmtpSecure] = useState(false);
   
@@ -350,6 +353,10 @@ export default function Home() {
   // Delete conversation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+  
+  // Delete account dialog state
+  const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
   // Countdown timer state for scheduled messages
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -939,12 +946,24 @@ export default function Home() {
       name: newAccountName.trim(),
       email: newAccountEmail.trim(),
       personality: newAccountPersonality.trim() || undefined,
+      emailConfig: newAccountSmtpHost.trim() && newAccountSmtpPort.trim() && newAccountEmail.trim() && newAccountSmtpPassword.trim()
+        ? {
+            smtpHost: newAccountSmtpHost.trim(),
+            smtpPort: parseInt(newAccountSmtpPort) || 587,
+            smtpUser: newAccountEmail.trim(),
+            smtpPassword: newAccountSmtpPassword.trim(),
+            smtpSecure: parseInt(newAccountSmtpPort) === 465, // Port 465 uses SSL
+          }
+        : undefined,
     };
 
     setAccounts([...accounts, newAccount]);
     setNewAccountName("");
     setNewAccountEmail("");
     setNewAccountPersonality("");
+    setNewAccountSmtpHost("");
+    setNewAccountSmtpPort("587");
+    setNewAccountSmtpPassword("");
     setDialogOpen(false);
     setError(null);
   };
@@ -986,7 +1005,6 @@ export default function Home() {
     setConfigAccountId(account.id);
     setSmtpHost(account.emailConfig?.smtpHost || "");
     setSmtpPort(account.emailConfig?.smtpPort?.toString() || "587");
-    setSmtpUser(account.emailConfig?.smtpUser || account.email);
     setSmtpPassword(account.emailConfig?.smtpPassword || "");
     setSmtpSecure(account.emailConfig?.smtpSecure || false);
     setConfigDialogOpen(true);
@@ -998,8 +1016,8 @@ export default function Home() {
     const account = accounts.find(acc => acc.id === configAccountId);
     if (!account) return;
 
-    if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
-      setError("All SMTP fields are required");
+    if (!smtpHost || !smtpPort || !smtpPassword) {
+      setError("SMTP Host, Port, and App Password are required");
       return;
     }
 
@@ -1010,9 +1028,9 @@ export default function Home() {
           emailConfig: {
             smtpHost,
             smtpPort: parseInt(smtpPort),
-            smtpUser,
+            smtpUser: account.email, // Use account email as SMTP user
             smtpPassword,
-            smtpSecure,
+            smtpSecure: parseInt(smtpPort) === 465, // Port 465 uses SSL, others use STARTTLS
           },
         };
       }
@@ -1103,11 +1121,13 @@ export default function Home() {
       }
 
       if (data.success) {
-        if (data.accounts?.length > 0) {
+        // Always replace accounts, even if empty (to remove deleted ones)
+        if (data.accounts !== undefined) {
           setAccounts(data.accounts);
           console.log(`Loaded ${data.accounts.length} accounts`);
         }
-        if (data.conversations?.length > 0) {
+        // Always replace conversations, even if empty (to remove deleted ones)
+        if (data.conversations !== undefined) {
           setConversations(data.conversations);
           console.log(`Loaded ${data.conversations.length} conversations`);
         }
@@ -1122,11 +1142,64 @@ export default function Home() {
   };
 
 
-  const handleDeleteAccount = (accountId: string) => {
-    if (confirm("Are you sure you want to delete this account?")) {
-      setAccounts(accounts.filter(acc => acc.id !== accountId));
-      setSuccess("Account deleted");
+  const handleDeleteAccount = async () => {
+    if (!accountToDelete) return;
+
+    try {
+      // Remove from local state
+      const remaining = accounts.filter(acc => acc.id !== accountToDelete.id);
+      setAccounts(remaining);
+      
+      // Remove account from any conversations that use it
+      setConversations(convs => convs.map(conv => {
+        // Remove from selectedAccount if it matches
+        if (conv.selectedAccount?.id === accountToDelete.id) {
+          return { ...conv, selectedAccount: null };
+        }
+        // Remove from otherAccounts
+        return {
+          ...conv,
+          otherAccounts: conv.otherAccounts.filter(acc => acc.id !== accountToDelete.id)
+        };
+      }));
+
+      // Sync to Google Sheets
+      try {
+        const response = await fetch("/api/google-sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sync-all",
+            accounts: remaining,
+            conversations: conversations,
+          }),
+        });
+
+        if (!response.ok) {
+          try {
+            const errorData = await response.json();
+            console.error("Failed to sync account deletion to Google Sheets:", errorData);
+          } catch (e) {
+            console.error("Failed to sync account deletion to Google Sheets:", response.status, response.statusText);
+          }
+          // Don't show error to user - deletion succeeded locally
+        }
+      } catch (syncError) {
+        console.error("Error syncing account deletion to Google Sheets:", syncError);
+        // Don't show error to user - deletion succeeded locally
+      }
+
+      setDeleteAccountDialogOpen(false);
+      setAccountToDelete(null);
+      setSuccess(`Account "${accountToDelete.name}" deleted successfully`);
+    } catch (error: any) {
+      setError(error.message || "Failed to delete account");
     }
+  };
+
+  const openDeleteAccountDialog = (account: Account) => {
+    setAccountToDelete(account);
+    setDeleteAccountDialogOpen(true);
   };
 
   const toggleOtherAccount = (account: Account) => {
@@ -1167,8 +1240,12 @@ export default function Home() {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Failed to sync deletion to Google Sheets:", errorData);
+          try {
+            const errorData = await response.json();
+            console.error("Failed to sync deletion to Google Sheets:", errorData);
+          } catch (e) {
+            console.error("Failed to sync deletion to Google Sheets:", response.status, response.statusText);
+          }
           // Don't show error to user - deletion succeeded locally
         }
       } catch (syncError) {
@@ -1230,7 +1307,7 @@ export default function Home() {
                   ) : (
                     <>
                       {isMobile && <span className="mr-2">Sync</span>}
-                      <Database className="h-4 w-4" />
+                      <RefreshCw className="h-4 w-4" />
                     </>
                   )}
                 </Button>
@@ -1268,11 +1345,13 @@ export default function Home() {
         </div>
 
         {/* Main Tabs */}
-        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "conversations" | "accounts" | "database")} className="mb-4 md:mb-6">
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as "conversations" | "accounts" | "settings")} className="mb-4 md:mb-6">
           <TabsList className="w-full md:w-auto grid grid-cols-3 md:inline-flex">
             <TabsTrigger value="conversations" className="text-xs md:text-sm">Conversations</TabsTrigger>
             <TabsTrigger value="accounts" className="text-xs md:text-sm">Accounts</TabsTrigger>
-            <TabsTrigger value="database" className="text-xs md:text-sm">Database</TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center justify-center">
+              <Settings className="h-4 w-4" />
+            </TabsTrigger>
           </TabsList>
 
           {/* Conversations Tab */}
@@ -1324,8 +1403,8 @@ export default function Home() {
                           className="fixed inset-0 bg-black/50 z-40 md:hidden"
                           onClick={() => setMobileSidebarOpen(false)}
                         />
-                        <div className="fixed left-0 top-0 bottom-0 w-64 bg-background border-r z-50 md:hidden overflow-y-auto p-4">
-                          <div className="flex items-center justify-between mb-4">
+                        <div className="fixed left-0 top-0 bottom-0 w-64 bg-background border-r z-50 md:hidden flex flex-col p-4">
+                          <div className="flex items-center justify-between mb-4 flex-shrink-0">
                             <h3 className="text-sm font-semibold">Conversations</h3>
                             <Button
                               variant="ghost"
@@ -1336,8 +1415,10 @@ export default function Home() {
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
-                          <div className="space-y-1">
-                            {conversations.map((conv) => (
+                          <div className="flex-1 min-h-0 overflow-hidden">
+                            <div className="scrollable-list h-full">
+                              <div className="space-y-1">
+                                {conversations.map((conv) => (
                               <div
                                 key={conv.id}
                                 className={`group relative flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -1392,20 +1473,23 @@ export default function Home() {
                                   </Button>
                                 </div>
                               </div>
-                            ))}
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </>
                     )}
                     <div className="flex flex-col md:flex-row gap-4 min-h-[400px] md:min-h-[600px]">
                       {/* Left Sidebar - Conversations List (Desktop) */}
-                      <div className="hidden md:flex w-64 border-r pr-4 flex-shrink-0 flex flex-col">
-                      <div className="mb-3">
+                      <div className="hidden md:flex w-64 border-r pr-4 flex-shrink-0 flex flex-col" style={{ maxHeight: 'calc(100vh - 150px)' }}>
+                      <div className="mb-3 flex-shrink-0">
                         <h3 className="text-sm font-semibold">Conversations</h3>
                       </div>
-                      <div className="flex-1 overflow-y-auto min-h-0">
-                        <div className="space-y-1">
-                          {conversations.map((conv) => (
+                      <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="scrollable-list">
+                          <div className="space-y-1">
+                            {conversations.map((conv) => (
                             <div
                               key={conv.id}
                               className={`group relative flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -1505,7 +1589,8 @@ export default function Home() {
                                 )}
                               </div>
                             </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1911,15 +1996,28 @@ export default function Home() {
           <TabsContent value="accounts" className="mt-4 md:mt-6">
             <Card>
               <CardHeader>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-lg md:text-xl">Manage Accounts</CardTitle>
-                    <CardDescription className="text-sm">Create and manage email accounts for conversations</CardDescription>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg md:text-xl">Manage Accounts</CardTitle>
+                      <CardDescription className="text-sm">Create and manage email accounts for conversations</CardDescription>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1 sm:flex-initial sm:w-64">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search accounts..."
+                          value={accountSearchQuery}
+                          onChange={(e) => setAccountSearchQuery(e.target.value)}
+                          className="pl-8"
+                        />
+                      </div>
+                      <Button onClick={() => setDialogOpen(true)} type="button" className="w-full sm:w-auto">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Account
+                      </Button>
+                    </div>
                   </div>
-                  <Button onClick={() => setDialogOpen(true)} type="button" className="w-full md:w-auto">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Account
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1931,9 +2029,27 @@ export default function Home() {
                       Add Your First Account
                     </Button>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {accounts.map((account) => (
+                ) : (() => {
+                  const searchQuery = accountSearchQuery.toLowerCase().trim();
+                  const filteredAccounts = searchQuery
+                    ? accounts.filter(account =>
+                        account.name.toLowerCase().includes(searchQuery) ||
+                        account.email.toLowerCase().includes(searchQuery) ||
+                        account.personality?.toLowerCase().includes(searchQuery)
+                      )
+                    : accounts;
+                  
+                  if (filteredAccounts.length === 0) {
+                    return (
+                      <div className="text-center py-12">
+                        <p className="text-muted-foreground">No accounts found matching "{accountSearchQuery}"</p>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredAccounts.map((account) => (
                       <div
                         key={account.id}
                         className="p-4 rounded-lg border border-border hover:border-primary/50 transition"
@@ -1969,7 +2085,7 @@ export default function Home() {
                               size="icon"
                               className="h-8 w-8"
                               type="button"
-                              onClick={() => handleDeleteAccount(account.id)}
+                              onClick={() => openDeleteAccountDialog(account)}
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -1977,14 +2093,15 @@ export default function Home() {
                         </div>
                       </div>
                     ))}
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Database Tab */}
-          <TabsContent value="database" className="mt-4 md:mt-6">
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="mt-4 md:mt-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg md:text-xl">Google Sheets Integration</CardTitle>
@@ -2007,7 +2124,7 @@ export default function Home() {
                         </>
                       ) : (
                         <>
-                          <Database className="mr-2 h-4 w-4" />
+                          <RefreshCw className="mr-2 h-4 w-4" />
                           Sync All to Google Sheets
                         </>
                       )}
@@ -2019,7 +2136,7 @@ export default function Home() {
                       type="button"
                       className="w-full md:w-auto"
                     >
-                      <Database className="mr-2 h-4 w-4" />
+                      <RefreshCw className="mr-2 h-4 w-4" />
                       Sync Accounts Only
                     </Button>
                     <Button
@@ -2029,7 +2146,7 @@ export default function Home() {
                       type="button"
                       className="w-full md:w-auto"
                     >
-                      <Database className="mr-2 h-4 w-4" />
+                      <RefreshCw className="mr-2 h-4 w-4" />
                       Sync Conversations Only
                     </Button>
                     <Button
@@ -2046,7 +2163,7 @@ export default function Home() {
                         </>
                       ) : (
                         <>
-                          <Database className="mr-2 h-4 w-4" />
+                          <RefreshCw className="mr-2 h-4 w-4" />
                           Load from Google Sheets
                         </>
                       )}
@@ -2120,7 +2237,81 @@ export default function Home() {
                 value={newAccountPersonality}
                 onChange={(e) => setNewAccountPersonality(e.target.value)}
                 rows={3}
+                className="resize-none"
               />
+            </div>
+            
+            <div className="border-t pt-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="newSmtpSettings">Email Platform</Label>
+                <div className="flex gap-2 items-start">
+                  <div className="flex-1 flex flex-col gap-2">
+                    <select
+                      id="newSmtpHost"
+                      value={newAccountSmtpHost === "" || !["smtp.gmail.com", "smtp-mail.outlook.com", "smtp.mail.yahoo.com", "smtp.mail.me.com", "smtp.zoho.com", "smtp.office365.com", "mail.proton.me"].includes(newAccountSmtpHost) ? "" : newAccountSmtpHost}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === "") {
+                          setNewAccountSmtpHost("");
+                        } else {
+                          setNewAccountSmtpHost(value);
+                          // Auto-set port based on host (most use 587)
+                          setNewAccountSmtpPort("587");
+                        }
+                      }}
+                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">Custom</option>
+                      <option value="smtp.gmail.com">Gmail</option>
+                      <option value="smtp-mail.outlook.com">Outlook</option>
+                      <option value="smtp-mail.outlook.com">Hotmail</option>
+                      <option value="smtp.mail.yahoo.com">Yahoo Mail</option>
+                      <option value="smtp.mail.me.com">iCloud Mail</option>
+                      <option value="smtp.gmail.com">Google Workspace</option>
+                      <option value="smtp.zoho.com">Zoho Mail</option>
+                      <option value="smtp.office365.com">Microsoft 365</option>
+                      <option value="mail.proton.me">Proton Mail</option>
+                    </select>
+                    {(newAccountSmtpHost === "" || !["smtp.gmail.com", "smtp-mail.outlook.com", "smtp.mail.yahoo.com", "smtp.mail.me.com", "smtp.zoho.com", "smtp.office365.com", "mail.proton.me"].includes(newAccountSmtpHost)) && (
+                      <Input
+                        placeholder="smtp.example.com"
+                        value={newAccountSmtpHost}
+                        onChange={(e) => setNewAccountSmtpHost(e.target.value)}
+                      />
+                    )}
+                  </div>
+                  <div className="relative w-24">
+                    <Input
+                      id="newSmtpPort"
+                      type="number"
+                      placeholder="587"
+                      value={newAccountSmtpPort}
+                      onChange={(e) => setNewAccountSmtpPort(e.target.value)}
+                      disabled={newAccountSmtpHost !== "" && ["smtp.gmail.com", "smtp-mail.outlook.com", "smtp.mail.yahoo.com", "smtp.mail.me.com", "smtp.zoho.com", "smtp.office365.com", "mail.proton.me"].includes(newAccountSmtpHost)}
+                      className="w-full pr-8 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 group">
+                      <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                      <div className="absolute right-0 top-full mt-2 w-48 p-2 bg-popover border border-border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 text-xs text-popover-foreground">
+                        SMTP port, set automatically.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {newAccountSmtpHost ? `${newAccountSmtpHost}:${newAccountSmtpPort}` : "Select or enter SMTP host and port"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newSmtpPassword">App Password</Label>
+                <Input
+                  id="newSmtpPassword"
+                  type="password"
+                  placeholder="Your app password"
+                  value={newAccountSmtpPassword}
+                  onChange={(e) => setNewAccountSmtpPassword(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -2142,6 +2333,43 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Account Dialog */}
+      <Dialog open={deleteAccountDialogOpen} onOpenChange={setDeleteAccountDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you sure you want to delete account {accountToDelete?.name}?</DialogTitle>
+            <DialogDescription>
+              {accountToDelete?.name} ({accountToDelete?.email}) will be removed from the list and database permanently. This account will also be removed from any conversations it's participating in.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setDeleteAccountDialogOpen(false);
+                setAccountToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDeleteAccount();
+                // Close dialog immediately
+                setDeleteAccountDialogOpen(false);
+                setAccountToDelete(null);
+              }}
+              type="button"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Email Configuration Dialog */}
       <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
         <DialogContent className="max-w-md">
@@ -2157,83 +2385,84 @@ export default function Home() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="smtpHost">SMTP Host</Label>
-              <Input
-                id="smtpHost"
-                placeholder="smtp.gmail.com"
-                value={smtpHost}
-                onChange={(e) => setSmtpHost(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="smtpPort">SMTP Port</Label>
-              <Input
-                id="smtpPort"
-                type="number"
-                placeholder="587"
-                value={smtpPort}
-                onChange={(e) => {
-                  const port = e.target.value;
-                  setSmtpPort(port);
-                  // Auto-adjust secure setting based on port
-                  const portNum = parseInt(port);
-                  if (portNum === 587) {
-                    setSmtpSecure(false); // Port 587 uses STARTTLS, not SSL
-                  } else if (portNum === 465) {
-                    setSmtpSecure(true); // Port 465 uses SSL
-                  }
-                }}
-              />
+              <Label htmlFor="smtpSettings">Email Platform</Label>
+              <div className="flex gap-2 items-start">
+                <div className="flex-1 flex flex-col gap-2">
+                  <select
+                    id="smtpHost"
+                    value={smtpHost === "" || !["smtp.gmail.com", "smtp-mail.outlook.com", "smtp.mail.yahoo.com", "smtp.mail.me.com", "smtp.zoho.com", "smtp.office365.com", "mail.proton.me"].includes(smtpHost) ? "" : smtpHost}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "") {
+                        setSmtpHost("");
+                      } else {
+                        setSmtpHost(value);
+                        // Auto-set port based on host (most use 587)
+                        setSmtpPort("587");
+                      }
+                    }}
+                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Custom</option>
+                    <option value="smtp.gmail.com">Gmail</option>
+                    <option value="smtp-mail.outlook.com">Outlook</option>
+                    <option value="smtp-mail.outlook.com">Hotmail</option>
+                    <option value="smtp.mail.yahoo.com">Yahoo Mail</option>
+                    <option value="smtp.mail.me.com">iCloud Mail</option>
+                    <option value="smtp.gmail.com">Google Workspace</option>
+                    <option value="smtp.zoho.com">Zoho Mail</option>
+                    <option value="smtp.office365.com">Microsoft 365</option>
+                    <option value="mail.proton.me">Proton Mail</option>
+                  </select>
+                  {(smtpHost === "" || !["smtp.gmail.com", "smtp-mail.outlook.com", "smtp.mail.yahoo.com", "smtp.mail.me.com", "smtp.zoho.com", "smtp.office365.com", "mail.proton.me"].includes(smtpHost)) && (
+                    <Input
+                      placeholder="smtp.example.com"
+                      value={smtpHost}
+                      onChange={(e) => setSmtpHost(e.target.value)}
+                    />
+                  )}
+                </div>
+                <div className="relative w-24">
+                  <Input
+                    id="smtpPort"
+                    type="number"
+                    placeholder="587"
+                    value={smtpPort}
+                    onChange={(e) => {
+                      const port = e.target.value;
+                      setSmtpPort(port);
+                      // Auto-adjust secure setting based on port
+                      const portNum = parseInt(port);
+                      if (portNum === 587) {
+                        setSmtpSecure(false); // Port 587 uses STARTTLS, not SSL
+                      } else if (portNum === 465) {
+                        setSmtpSecure(true); // Port 465 uses SSL
+                      }
+                    }}
+                    disabled={smtpHost !== "" && ["smtp.gmail.com", "smtp-mail.outlook.com", "smtp.mail.yahoo.com", "smtp.mail.me.com", "smtp.zoho.com", "smtp.office365.com", "mail.proton.me"].includes(smtpHost)}
+                    className="w-full pr-8 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 group">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                    <div className="absolute right-0 top-full mt-2 w-64 p-2 bg-popover border border-border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 text-xs text-popover-foreground">
+                      SMTP Port determines the connection method. Port 587 uses STARTTLS, port 465 uses SSL. This is automatically set based on your SMTP host selection - please do not change it.
+                    </div>
+                  </div>
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground">
                 Common ports: 587 (STARTTLS), 465 (SSL), 25 (STARTTLS)
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="smtpUser">SMTP Username/Email</Label>
-              <Input
-                id="smtpUser"
-                type="email"
-                placeholder="your@email.com"
-                value={smtpUser}
-                onChange={(e) => setSmtpUser(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="smtpPassword">SMTP Password</Label>
+              <Label htmlFor="smtpPassword">App Password</Label>
               <Input
                 id="smtpPassword"
                 type="password"
-                placeholder="Your email password or app password"
+                placeholder="Your app password"
                 value={smtpPassword}
                 onChange={(e) => setSmtpPassword(e.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="smtpSecure"
-                  checked={smtpSecure}
-                  disabled={parseInt(smtpPort) === 587}
-                  onCheckedChange={(checked) => {
-                    const port = parseInt(smtpPort);
-                    if (port === 587) {
-                      setSmtpSecure(false); // Port 587 always uses STARTTLS, not SSL
-                    } else {
-                      setSmtpSecure(checked === true);
-                    }
-                  }}
-                />
-                <label htmlFor="smtpSecure" className="text-sm cursor-pointer">
-                  Use secure connection (SSL/TLS)
-                </label>
-              </div>
-              <p className="text-xs text-muted-foreground ml-6">
-                {parseInt(smtpPort) === 587 
-                  ? "Port 587 uses STARTTLS (automatically enabled). Do not check this box."
-                  : parseInt(smtpPort) === 465
-                  ? "Port 465 requires SSL/TLS. This will be enabled automatically."
-                  : "Check this for SSL/TLS connections."}
-              </p>
             </div>
           </div>
           <DialogFooter>
@@ -2292,6 +2521,7 @@ export default function Home() {
                 value={editAccountPersonality}
                 onChange={(e) => setEditAccountPersonality(e.target.value)}
                 rows={3}
+                className="resize-none"
               />
             </div>
             {error && (

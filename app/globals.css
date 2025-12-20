@@ -129,6 +129,32 @@
   animation: slide-fade-in 0.6s ease-out forwards;
 }
 
+/* Scrollable list with fade mask */
+.scrollable-list {
+  max-height: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  padding-bottom: 50px;
+}
+
+.scrollable-list::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    hsl(var(--background))
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
 /* Mobile overflow prevention */
 @media (max-width: 767px) {
   body {
@@ -141,6 +167,10 @@
   
   input, textarea, select {
     font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .scrollable-list {
+    max-height: calc(100vh - 200px);
   }
 }
 
