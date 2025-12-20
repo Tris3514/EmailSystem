@@ -1539,7 +1539,6 @@ export default function Home() {
                         </div>
                       </div>
                     </div>
-                    </div>
 
                     {/* Main Content Area */}
                     <div className="flex-1 overflow-y-auto min-h-0">
