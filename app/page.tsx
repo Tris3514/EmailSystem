@@ -92,13 +92,24 @@ export default function Home() {
   const [displayedTitle, setDisplayedTitle] = useState("");
   const [isTypingComplete, setIsTypingComplete] = useState(false);
   const [showSubtitle, setShowSubtitle] = useState(false);
+  
+  // Transition animation state
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [showMainApp, setShowMainApp] = useState(false);
 
   // Check authentication status after mount (client-side only)
   useEffect(() => {
     if (typeof window !== "undefined") {
       const authStatus = localStorage.getItem(STORAGE_KEY_AUTHENTICATED);
-      setIsAuthenticated(authStatus === "true");
+      const isAuth = authStatus === "true";
+      setIsAuthenticated(isAuth);
       setIsCheckingAuth(false);
+      // If already authenticated, show main app with a slight delay for fade-in effect
+      if (isAuth) {
+        setTimeout(() => {
+          setShowMainApp(true);
+        }, 50);
+      }
     }
   }, []);
 
@@ -358,13 +369,53 @@ export default function Home() {
     return `${seconds}s`;
   }, [currentTime]);
 
+  // Function to play unlock chime sound
+  const playUnlockChime = useCallback(() => {
+    if (typeof window === "undefined") return;
+    
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Create a pleasant unlock chime using multiple frequencies
+      const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5 - a pleasant major chord
+      const duration = 0.5;
+      const gainNode = audioContext.createGain();
+      gainNode.connect(audioContext.destination);
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+      
+      frequencies.forEach((freq, index) => {
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+        oscillator.connect(gainNode);
+        oscillator.start(audioContext.currentTime + index * 0.1);
+        oscillator.stop(audioContext.currentTime + duration);
+      });
+    } catch (error) {
+      // Silently fail if audio context is not available
+      console.debug("Audio context not available");
+    }
+  }, []);
+
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordInput === APP_PASSWORD) {
-      setIsAuthenticated(true);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(STORAGE_KEY_AUTHENTICATED, "true");
-      }
+      // Play unlock chime
+      playUnlockChime();
+      
+      // Start unlock animation
+      setIsUnlocking(true);
+      
+      // After animation completes, set authenticated and show main app
+      setTimeout(() => {
+        setIsAuthenticated(true);
+        setShowMainApp(true);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEY_AUTHENTICATED, "true");
+        }
+      }, 600); // Match animation duration
+      
       setPasswordError(null);
       setPasswordInput("");
     } else {
@@ -385,7 +436,9 @@ export default function Home() {
   // Show login screen if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className={`min-h-screen flex items-center justify-center bg-background p-4 transition-opacity duration-600 ${
+        isUnlocking ? "animate-fade-out" : ""
+      }`}>
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-2xl text-center">
@@ -1125,7 +1178,7 @@ export default function Home() {
   const activeConv = getActiveConversation();
 
   return (
-    <div className="min-h-screen bg-black p-8" style={{
+    <div className={`min-h-screen bg-black p-8 ${showMainApp ? "animate-slide-fade-in" : "opacity-0"}`} style={{
       backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px)',
       backgroundSize: '20px 20px'
     }}>
@@ -1166,6 +1219,8 @@ export default function Home() {
               size="icon"
               type="button"
               onClick={() => {
+                setShowMainApp(false);
+                setIsUnlocking(false);
                 setIsAuthenticated(false);
                 if (typeof window !== "undefined") {
                   localStorage.removeItem(STORAGE_KEY_AUTHENTICATED);

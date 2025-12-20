@@ -91,11 +91,41 @@
   }
 }
 
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes slide-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-bounce-in {
   animation: bounce-in 0.6s ease-out forwards;
 }
 
 .animate-fade-in {
   animation: fade-in 0.5s ease-in forwards;
+}
+
+.animate-fade-out {
+  animation: fade-out 0.6s ease-in forwards;
+}
+
+.animate-slide-fade-in {
+  animation: slide-fade-in 0.6s ease-out forwards;
 }
 
