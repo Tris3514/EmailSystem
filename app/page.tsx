@@ -155,36 +155,6 @@ export default function Home() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Theme management based on current tab/page
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    
-    const html = document.documentElement;
-    
-    // Remove all theme classes
-    html.classList.remove("theme-blue", "theme-orange", "theme-neutral");
-    
-    if (!isAuthenticated) {
-      // Password page - neutral theme
-      html.classList.add("theme-neutral");
-    } else {
-      // Apply theme based on current tab
-      switch (mainTab) {
-        case "conversations":
-          html.classList.add("theme-blue");
-          break;
-        case "accounts":
-          html.classList.add("theme-orange");
-          break;
-        case "database":
-          html.classList.add("theme-neutral");
-          break;
-        default:
-          html.classList.add("theme-neutral");
-      }
-    }
-  }, [isAuthenticated, mainTab]);
-
   // Load accounts from localStorage on mount
   const [accounts, setAccounts] = useState<Account[]>(() => {
     if (typeof window !== "undefined") {
@@ -245,6 +215,37 @@ export default function Home() {
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [mainTab, setMainTab] = useState<"conversations" | "accounts" | "database">("conversations");
+  
+  // Theme management based on current tab/page
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const html = document.documentElement;
+    
+    // Remove all theme classes
+    html.classList.remove("theme-blue", "theme-orange", "theme-neutral");
+    
+    if (!isAuthenticated) {
+      // Password page - neutral theme
+      html.classList.add("theme-neutral");
+    } else {
+      // Apply theme based on current tab
+      switch (mainTab) {
+        case "conversations":
+          html.classList.add("theme-blue");
+          break;
+        case "accounts":
+          html.classList.add("theme-orange");
+          break;
+        case "database":
+          html.classList.add("theme-neutral");
+          break;
+        default:
+          html.classList.add("theme-neutral");
+      }
+    }
+  }, [isAuthenticated, mainTab]);
+  
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
