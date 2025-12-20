@@ -1921,7 +1921,6 @@ export default function Home() {
                             </Card>
                           </div>
                         </div>
-                          </div>
                         );
                       })()}
                       {!activeConversationId && (
