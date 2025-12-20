@@ -87,6 +87,11 @@ export default function Home() {
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  
+  // Typing animation state for lock screen
+  const [displayedTitle, setDisplayedTitle] = useState("");
+  const [isTypingComplete, setIsTypingComplete] = useState(false);
+  const [showSubtitle, setShowSubtitle] = useState(false);
 
   // Check authentication status after mount (client-side only)
   useEffect(() => {
@@ -96,6 +101,33 @@ export default function Home() {
       setIsCheckingAuth(false);
     }
   }, []);
+
+  // Typing animation effect for lock screen
+  useEffect(() => {
+    if (!isAuthenticated && !isCheckingAuth) {
+      const title = "Email System";
+      let currentIndex = 0;
+      setDisplayedTitle("");
+      setIsTypingComplete(false);
+      setShowSubtitle(false);
+
+      const typingInterval = setInterval(() => {
+        if (currentIndex < title.length) {
+          setDisplayedTitle(title.slice(0, currentIndex + 1));
+          currentIndex++;
+        } else {
+          clearInterval(typingInterval);
+          setIsTypingComplete(true);
+          // Show subtitle after typing completes with a small delay
+          setTimeout(() => {
+            setShowSubtitle(true);
+          }, 300);
+        }
+      }, 100); // Typing speed: 100ms per character
+
+      return () => clearInterval(typingInterval);
+    }
+  }, [isAuthenticated, isCheckingAuth]);
 
   // Load accounts from localStorage on mount
   const [accounts, setAccounts] = useState<Account[]>(() => {
@@ -356,8 +388,17 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-2xl text-center">Email System</CardTitle>
-            <CardDescription className="text-center">
+            <CardTitle className="text-2xl text-center">
+              <span className={isTypingComplete ? "animate-bounce-in inline-block" : "inline-block"}>
+                {displayedTitle}
+                {!isTypingComplete && <span className="animate-pulse ml-1">|</span>}
+              </span>
+            </CardTitle>
+            <CardDescription 
+              className={`text-center transition-opacity duration-500 ${
+                showSubtitle ? "opacity-100 animate-fade-in" : "opacity-0"
+              }`}
+            >
               Enter password to access
             </CardDescription>
           </CardHeader>
