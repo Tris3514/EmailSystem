@@ -10,7 +10,26 @@ AI-powered email generation and sending system built with Next.js.
 - Scheduled email sending with random delays
 - Dark mode UI with custom font
 
-## Deployment to Vercel (Recommended)
+## Deployment Options
+
+This project can be deployed to multiple platforms:
+
+### Azure App Service (Recommended for Enterprise)
+
+Full deployment guide available in [AZURE_DEPLOYMENT.md](./AZURE_DEPLOYMENT.md)
+
+**Quick Start:**
+1. Create Azure App Service (Node.js 20 LTS)
+2. Set environment variables in Azure Portal:
+   - `OPENAI_API_KEY` (required)
+   - `GOOGLE_SHEETS_CREDENTIALS` (optional)
+   - `NEXT_PUBLIC_APP_PASSWORD` (optional)
+3. Deploy via GitHub Actions or Azure CLI
+4. Set startup command: `node server.js`
+
+See [AZURE_DEPLOYMENT.md](./AZURE_DEPLOYMENT.md) for detailed instructions.
+
+### Vercel (Recommended for Quick Deploy)
 
 This project is configured to deploy to Vercel, which supports full Next.js with API routes.
 
@@ -72,9 +91,14 @@ npm run dev
 
 ## Environment Variables
 
-- `OPENAI_API_KEY` - Required for AI message generation
-- `NEXT_PUBLIC_API_URL` - API base URL (only needed for GitHub Pages deployment)
-- `NEXT_PUBLIC_APP_PASSWORD` - Password required to access the application (defaults to "password123" if not set)
+- `OPENAI_API_KEY` - **Required** for AI message generation. Get from [OpenAI Platform](https://platform.openai.com/api-keys)
+- `GOOGLE_SHEETS_CREDENTIALS` - **Optional** JSON string of service account credentials for Google Sheets integration
+- `NEXT_PUBLIC_APP_PASSWORD` - **Optional** password to protect access (defaults to "password123")
+- `NEXT_PUBLIC_API_URL` - **Optional** API base URL (only needed for static deployments like GitHub Pages)
+- `AZURE_DEPLOYMENT` - **Optional** set to "true" when deploying to Azure App Service
+- `NODE_ENV` - **Optional** set to "production" for production deployments
+
+See [.env.example](./.env.example) for reference.
 
 ## Project Structure
 

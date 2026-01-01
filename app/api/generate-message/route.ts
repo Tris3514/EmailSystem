@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-// Initialize OpenAI client - Vercel will provide the API key at runtime
+// Initialize OpenAI client - Azure/Vercel will provide the API key at runtime
 const getOpenAIClient = () => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     const isVercel = process.env.VERCEL === '1';
-    const errorMessage = isVercel
-      ? "OPENAI_API_KEY is not set. Please add it in Vercel project settings: Settings → Environment Variables → Add OPENAI_API_KEY"
-      : "OPENAI_API_KEY is not set. For local development, create a .env.local file with: OPENAI_API_KEY=your_key_here";
+    const isAzure = process.env.WEBSITE_SITE_NAME || process.env.AZURE_WEBAPP_NAME;
+    let errorMessage;
+    if (isVercel) {
+      errorMessage = "OPENAI_API_KEY is not set. Please add it in Vercel project settings: Settings → Environment Variables → Add OPENAI_API_KEY";
+    } else if (isAzure) {
+      errorMessage = "OPENAI_API_KEY is not set. Please add it in Azure App Service: Configuration → Application settings → Add OPENAI_API_KEY";
+    } else {
+      errorMessage = "OPENAI_API_KEY is not set. For local development, create a .env.local file with: OPENAI_API_KEY=your_key_here";
+    }
     throw new Error(errorMessage);
   }
   return new OpenAI({
