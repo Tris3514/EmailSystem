@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical, LogOut, Menu, RefreshCw, HelpCircle } from "lucide-react";
+import { Plus, Loader2, Mail, Settings, X, Pencil, CheckCircle2, Clock, Trash2, Database, ExternalLink, Search, MoreVertical, LogOut, Menu, RefreshCw, HelpCircle, Send } from "lucide-react";
 
 interface Message {
   id: string;
@@ -219,6 +219,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [accountSearchQuery, setAccountSearchQuery] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [sendingConversationId, setSendingConversationId] = useState<string | null>(null);
+  const [sendingProgress, setSendingProgress] = useState<{ sent: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [googleSheetsId, setGoogleSheetsId] = useState<string | null>(null);
@@ -783,9 +785,18 @@ export default function Home() {
     setError(null);
     setSuccess(null);
 
+    // If regenerating, clear existing messages
+    const isRegenerating = conv.messages.length > 0;
+    if (isRegenerating) {
+      updateActiveConversation(c => ({
+        ...c,
+        messages: [],
+      }));
+    }
+
     const allParticipants = [conv.selectedAccount, ...conv.otherAccounts];
     const newMessages: Message[] = [];
-    let currentHistory = [...conv.messages];
+    let currentHistory: Message[] = []; // Start fresh when regenerating
 
     try {
       // Generate conversation back and forth
@@ -839,13 +850,13 @@ export default function Home() {
 
       updateActiveConversation(c => ({
         ...c,
-        messages: [...c.messages, ...newMessages],
+        messages: newMessages,
         prompt: "",
       }));
 
       const totalCost = newMessages.reduce((sum, msg) => sum + (msg.cost || 0), 0);
       const totalTokens = newMessages.reduce((sum, msg) => sum + (msg.tokens?.total || 0), 0);
-      setSuccess(`Generated ${newMessages.length} messages${totalCost > 0 ? ` ($${totalCost.toFixed(4)}, ${totalTokens.toLocaleString()} tokens)` : ''}`);
+      setSuccess(`${isRegenerating ? 'Regenerated' : 'Generated'} ${newMessages.length} messages${totalCost > 0 ? ` ($${totalCost.toFixed(4)}, ${totalTokens.toLocaleString()} tokens)` : ''}`);
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {
@@ -866,6 +877,8 @@ export default function Home() {
     }
 
     setSendingEmail(true);
+    setSendingConversationId(conv.id);
+    setSendingProgress({ sent: 0, total: conv.messages.length });
     setError(null);
     setSuccess(null);
 
@@ -935,6 +948,9 @@ export default function Home() {
           const result = await sendEmailInternal(message, senderAccount, recipients, subject, conv.id, lastMessageId);
           sentCount++;
           
+          // Update sending progress
+          setSendingProgress({ sent: sentCount, total: conv.messages.length });
+          
           // Store the Message-ID for the next message to reference
           lastMessageId = result.messageId;
           
@@ -967,6 +983,8 @@ export default function Home() {
       setError(err.message || "Failed to send messages");
     } finally {
       setSendingEmail(false);
+      setSendingConversationId(null);
+      setSendingProgress(null);
     }
   };
 
@@ -1468,10 +1486,15 @@ export default function Home() {
                                 }}
                               >
                                 <div className="flex-1 min-w-0">
-                                  <div className={`text-sm font-medium truncate ${
+                                  <div className={`text-sm font-medium truncate flex items-center gap-2 ${
                                     activeConversationId === conv.id ? "text-primary-foreground" : ""
                                   }`}>
                                     {conv.name}
+                                    {sendingConversationId === conv.id && sendingProgress ? (
+                                      <span title={`Sending (${sendingProgress.sent} out of ${sendingProgress.total})`}>
+                                        <Send className="h-3 w-3 animate-pulse" />
+                                      </span>
+                                    ) : null}
                                   </div>
                                   <div className={`text-xs truncate ${
                                     activeConversationId === conv.id ? "text-primary-foreground/80" : "text-muted-foreground"
@@ -1536,10 +1559,15 @@ export default function Home() {
                               onClick={() => setActiveConversationId(conv.id)}
                             >
                               <div className="flex-1 min-w-0">
-                                <div className={`text-sm font-medium truncate ${
+                                <div className={`text-sm font-medium truncate flex items-center gap-2 ${
                                   activeConversationId === conv.id ? "text-primary-foreground" : ""
                                 }`}>
                                   {conv.name}
+                                  {sendingConversationId === conv.id && sendingProgress ? (
+                                    <span title={`Sending (${sendingProgress.sent} out of ${sendingProgress.total})`}>
+                                      <Send className="h-3 w-3 animate-pulse" />
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <div className={`text-xs truncate ${
                                   activeConversationId === conv.id ? "text-primary-foreground/80" : "text-muted-foreground"
@@ -1962,49 +1990,28 @@ export default function Home() {
                                     </div>
                                   )}
 
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                    <Button
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        console.log("Generate Message button clicked");
-                                        handleGenerateMessage();
-                                      }}
-                                      disabled={loading || !conv.selectedAccount || conv.otherAccounts.length === 0}
-                                      className="w-full"
-                                      type="button"
-                                    >
-                                      {loading ? (
-                                        <>
-                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                          Generating...
-                                        </>
-                                      ) : (
-                                        "Generate Single Message"
-                                      )}
-                                    </Button>
-                                    <Button
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        console.log("Generate Full Conversation button clicked");
-                                        handleGenerateFullConversation();
-                                      }}
-                                      disabled={loading || !conv.selectedAccount || conv.otherAccounts.length === 0}
-                                      variant="secondary"
-                                      className="w-full"
-                                      type="button"
-                                    >
-                                      {loading ? (
-                                        <>
-                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                          Generating...
-                                        </>
-                                      ) : (
-                                        "Generate Full Conversation"
-                                      )}
-                                    </Button>
-                                  </div>
+                                  <Button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      console.log("Generate/Regenerate button clicked");
+                                      handleGenerateFullConversation();
+                                    }}
+                                    disabled={loading || sendingEmail || !conv.selectedAccount || conv.otherAccounts.length === 0}
+                                    className="w-full"
+                                    type="button"
+                                  >
+                                    {loading ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Generating...
+                                      </>
+                                    ) : conv.messages.length > 0 ? (
+                                      "Regenerate"
+                                    ) : (
+                                      "Generate"
+                                    )}
+                                  </Button>
                                   {conv.messages.length > 0 && (
                                     <Button
                                       onClick={(e) => {
