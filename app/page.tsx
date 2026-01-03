@@ -50,6 +50,7 @@ interface Account {
   email: string;
   personality?: string;
   emailConfig?: EmailConfig;
+  color?: string; // Random color assigned to the account
 }
 
 interface Conversation {
@@ -358,8 +359,39 @@ export default function Home() {
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
+  // Edit message dialog state
+  const [editMessageDialogOpen, setEditMessageDialogOpen] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editedMessageContent, setEditedMessageContent] = useState("");
+
   // Countdown timer state for scheduled messages
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Generate a random color for an account
+  const generateAccountColor = useCallback((): string => {
+    // Generate a vibrant color with good contrast
+    const hue = Math.floor(Math.random() * 360);
+    const saturation = 60 + Math.floor(Math.random() * 40); // 60-100%
+    const lightness = 45 + Math.floor(Math.random() * 15); // 45-60%
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }, []);
+
+  // Migrate existing accounts to have colors (run once on mount)
+  useEffect(() => {
+    const accountsNeedingColors = accounts.filter(acc => !acc.color);
+    if (accountsNeedingColors.length > 0) {
+      setAccounts(prevAccounts => prevAccounts.map(acc => 
+        acc.color ? acc : { ...acc, color: generateAccountColor() }
+      ));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  // Get account color (with fallback)
+  const getAccountColor = useCallback((accountId: string): string => {
+    const account = accounts.find(a => a.id === accountId);
+    return account?.color || '#888888'; // Fallback gray if not found
+  }, [accounts]);
 
   // Update current time every second for countdown timers
   useEffect(() => {
@@ -683,7 +715,11 @@ export default function Home() {
       const sentMessages = conv.messages.filter(m => m.sent && m.emailMessageId);
       const previousMessage = sentMessages.length > 0 ? sentMessages[sentMessages.length - 1] : undefined;
       
-      const result = await sendEmailInternal(message, senderAccount, recipients, subject, conv.id, previousMessage?.emailMessageId);
+      // Get the latest message content from conversation state (in case it was edited)
+      const latestMessage = conv.messages.find(m => m.id === message.id);
+      const messageToSend = latestMessage ? { ...message, content: latestMessage.content } : message;
+      
+      const result = await sendEmailInternal(messageToSend, senderAccount, recipients, subject, conv.id, previousMessage?.emailMessageId);
       
       // Mark message as sent and store the Message-ID
       updateActiveConversation(c => ({
@@ -920,6 +956,7 @@ export default function Home() {
       name: newAccountName.trim(),
       email: newAccountEmail.trim(),
       personality: newAccountPersonality.trim() || undefined,
+      color: generateAccountColor(), // Assign a random color
       emailConfig: newAccountSmtpHost.trim() && newAccountSmtpPort.trim() && newAccountEmail.trim() && newAccountSmtpPassword.trim()
         ? {
             smtpHost: newAccountSmtpHost.trim(),
@@ -1632,11 +1669,18 @@ export default function Home() {
                                             {filteredAccounts.map((account) => {
                                               const isParticipant = conv.selectedAccount?.id === account.id || 
                                                                    conv.otherAccounts.some(a => a.id === account.id);
+                                              const accountColor = account.color || '#888888';
                                               return (
                                                 <div key={account.id} className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
-                                                  <div className="flex-1 min-w-0">
-                                                    <div className="text-sm font-medium truncate">{account.name}</div>
-                                                    <div className="text-xs text-muted-foreground truncate">{account.email}</div>
+                                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                    <div 
+                                                      className="w-1 h-8 shrink-0" 
+                                                      style={{ backgroundColor: accountColor }}
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="text-sm font-medium truncate">{account.name}</div>
+                                                      <div className="text-xs text-muted-foreground truncate">{account.email}</div>
+                                                    </div>
                                                   </div>
                                                   {isParticipant ? (
                                                     <Button
@@ -1798,8 +1842,9 @@ export default function Home() {
                                       // Only consider scheduled if there's a valid future scheduled time
                                       const isScheduled = msg.scheduledSendTime && !msg.sent && countdown !== null;
                                       
+                                      const messageAccountColor = getAccountColor(msg.accountId);
                                       return (
-                                        <div key={msg.id} className="border-l-4 border-primary pl-4 py-2">
+                                        <div key={msg.id} className="pl-4 py-2" style={{ borderLeft: `4px solid ${messageAccountColor}` }}>
                                           <div className="flex justify-between items-start mb-1">
                                             <div className="flex items-center gap-2">
                                               <span className="font-medium">{msg.accountName}</span>
@@ -1827,21 +1872,38 @@ export default function Home() {
                                           </div>
                                           <p className="text-foreground mb-2">{msg.content}</p>
                                           {conv.selectedAccount?.emailConfig && !msg.sent && (
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                console.log("Send Email button clicked");
-                                                handleSendEmail(msg);
-                                              }}
-                                              disabled={sendingEmail || conv.otherAccounts.length === 0 || isScheduled}
-                                            >
-                                              <Mail className="mr-2 h-4 w-4" />
-                                              {sendingEmail ? "Sending..." : isScheduled ? "Scheduled" : "Send Email"}
-                                            </Button>
+                                            <div className="flex gap-2">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  console.log("Edit Message button clicked");
+                                                  openEditMessageDialog(msg);
+                                                }}
+                                                disabled={sendingEmail || isScheduled}
+                                              >
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Edit
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  console.log("Send Email button clicked");
+                                                  handleSendEmail(msg);
+                                                }}
+                                                disabled={sendingEmail || conv.otherAccounts.length === 0 || isScheduled}
+                                              >
+                                                <Mail className="mr-2 h-4 w-4" />
+                                                {sendingEmail ? "Sending..." : isScheduled ? "Scheduled" : "Send Email"}
+                                              </Button>
+                                            </div>
                                           )}
                                         </div>
                                       );
@@ -2023,50 +2085,59 @@ export default function Home() {
                   
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredAccounts.map((account) => (
-                      <div
-                        key={account.id}
-                        className="p-4 rounded-lg border border-border hover:border-primary/50 transition"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="font-medium text-lg">{account.name}</div>
-                            <div className="text-sm text-muted-foreground">{account.email}</div>
-                            {account.personality && (
-                              <div className="text-xs text-muted-foreground mt-2">{account.personality}</div>
-                            )}
-                            {account.emailConfig ? (
-                              <div className="text-xs text-green-500 mt-2">✓ Email configured</div>
-                            ) : (
-                              <div className="text-xs text-yellow-500 mt-2">⚠ Email not configured</div>
-                            )}
+                      {filteredAccounts.map((account) => {
+                        const accountColor = account.color || '#888888';
+                        return (
+                          <div
+                            key={account.id}
+                            className="p-4 rounded-lg border border-border hover:border-primary/50 transition"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3 flex-1">
+                                <div 
+                                  className="w-1 h-12 shrink-0" 
+                                  style={{ backgroundColor: accountColor }}
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium text-lg">{account.name}</div>
+                                  <div className="text-sm text-muted-foreground">{account.email}</div>
+                                  {account.personality && (
+                                    <div className="text-xs text-muted-foreground mt-2">{account.personality}</div>
+                                  )}
+                                  {account.emailConfig ? (
+                                    <div className="text-xs text-green-500 mt-2">✓ Email configured</div>
+                                  ) : (
+                                    <div className="text-xs text-yellow-500 mt-2">⚠ Email not configured</div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" type="button" onClick={() => openEditDialog(account)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  type="button"
+                                  onClick={() => openConfigDialog(account)}
+                                >
+                                  <Settings className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  type="button"
+                                  onClick={() => openDeleteAccountDialog(account)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" type="button" onClick={() => openEditDialog(account)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              type="button"
-                              onClick={() => openConfigDialog(account)}
-                            >
-                              <Settings className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              type="button"
-                              onClick={() => openDeleteAccountDialog(account)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
                     </div>
                   );
                 })()}
@@ -2671,6 +2742,56 @@ export default function Home() {
               type="button"
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Message Dialog */}
+      <Dialog open={editMessageDialogOpen} onOpenChange={setEditMessageDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Message</DialogTitle>
+            <DialogDescription>
+              Edit the message content before sending.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="editedMessageContent">Message Content</Label>
+              <Textarea
+                id="editedMessageContent"
+                placeholder="Enter message content..."
+                value={editedMessageContent}
+                onChange={(e) => setEditedMessageContent(e.target.value)}
+                rows={6}
+                className="resize-none"
+              />
+            </div>
+            {error && (
+              <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 text-sm">
+                {error}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setEditMessageDialogOpen(false);
+              setEditingMessageId(null);
+              setEditedMessageContent("");
+              setError(null);
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSaveEditedMessage();
+              }}
+              type="button"
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
