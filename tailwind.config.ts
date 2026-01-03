@@ -10,7 +10,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-google-sans-flex)", "system-ui", "sans-serif"],
+        sans: ["'Futura'", "'Futura-Medium'", "'Futura Medium'", "'FuturaStd-Medium'", "'Trebuchet MS'", "Arial", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

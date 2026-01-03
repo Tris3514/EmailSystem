@@ -35,9 +35,16 @@ export async function POST(request: NextRequest) {
 
     const { smtpHost, smtpPort, smtpUser, smtpPassword, smtpSecure } = accountConfig;
 
-    if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
+    // Check which fields are missing and provide specific error message
+    const missingFields: string[] = [];
+    if (!smtpHost || smtpHost.trim() === '') missingFields.push('SMTP Host');
+    if (!smtpPort || smtpPort === 0) missingFields.push('SMTP Port');
+    if (!smtpUser || smtpUser.trim() === '') missingFields.push('SMTP User');
+    if (!smtpPassword || smtpPassword.trim() === '') missingFields.push('SMTP Password');
+
+    if (missingFields.length > 0) {
       return NextResponse.json(
-        { error: "SMTP configuration is incomplete. Host, port, user, and password are required." },
+        { error: `SMTP configuration is incomplete. Missing: ${missingFields.join(', ')}. Please configure all email settings for this account.` },
         { status: 400 }
       );
     }

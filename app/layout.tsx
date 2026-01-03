@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="dark">
-      <body className={`${googleSansFlex.variable} ${windowsCommandPrompt.variable} antialiased font-sans`}>
+      <body className={`${googleSansFlex.variable} ${windowsCommandPrompt.variable} antialiased`} style={{ fontFamily: "'Futura', 'Futura-Medium', 'Futura Medium', 'FuturaStd-Medium', 'Trebuchet MS', Arial, sans-serif" }}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
