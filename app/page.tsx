@@ -684,6 +684,31 @@ export default function Home() {
     return data;
   };
 
+  const openEditMessageDialog = (message: Message) => {
+    setEditingMessageId(message.id);
+    setEditedMessageContent(message.content);
+    setEditMessageDialogOpen(true);
+  };
+
+  const handleSaveEditedMessage = () => {
+    if (!editingMessageId || !editedMessageContent.trim()) {
+      setError("Message content cannot be empty");
+      return;
+    }
+
+    updateActiveConversation(c => ({
+      ...c,
+      messages: c.messages.map(m => 
+        m.id === editingMessageId ? { ...m, content: editedMessageContent.trim() } : m
+      ),
+    }));
+
+    setEditMessageDialogOpen(false);
+    setEditingMessageId(null);
+    setEditedMessageContent("");
+    setError(null);
+  };
+
   const handleSendEmail = async (message: Message, account?: Account) => {
     const conv = getActiveConversation();
     if (!conv) {
