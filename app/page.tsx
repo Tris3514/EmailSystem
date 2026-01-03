@@ -70,6 +70,7 @@ const STORAGE_KEY_ACCOUNTS = "email-system-accounts";
 const STORAGE_KEY_CONVERSATIONS = "email-system-conversations";
 const STORAGE_KEY_GOOGLE_SHEETS_ID = "email-system-google-sheets-id";
 const STORAGE_KEY_AUTHENTICATED = "email-system-authenticated";
+const STORAGE_KEY_SEND_WARNING_DISMISSED = "email-system-send-warning-dismissed";
 
 // Password - can be set via environment variable or use default
 const APP_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || "password123";
@@ -365,6 +366,10 @@ export default function Home() {
   const [editMessageDialogOpen, setEditMessageDialogOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editedMessageContent, setEditedMessageContent] = useState("");
+  // Send warning dialog state
+  const [sendWarningDialogOpen, setSendWarningDialogOpen] = useState(false);
+  const [dontShowSendWarning, setDontShowSendWarning] = useState(false);
+  const [pendingSendAction, setPendingSendAction] = useState<(() => void) | null>(null);
 
   // Countdown timer state for scheduled messages
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -874,6 +879,39 @@ export default function Home() {
     if (conv.messages.length === 0) {
       setError("No messages to send");
       return;
+    }
+
+    // Check if warning was dismissed
+    const warningDismissed = typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY_SEND_WARNING_DISMISSED) === "true";
+    
+    if (!warningDismissed) {
+      // Show warning dialog
+      setPendingSendAction(() => () => {
+        setSendWarningDialogOpen(false);
+        executeSendAllMessages();
+      });
+      setSendWarningDialogOpen(true);
+      return;
+    }
+
+    executeSendAllMessages();
+  };
+
+  const executeSendAllMessages = async () => {
+    const conv = getActiveConversation();
+    if (!conv) {
+      setError("Please select a conversation");
+      return;
+    }
+
+    if (conv.messages.length === 0) {
+      setError("No messages to send");
+      return;
+    }
+
+    // Save "don't show again" preference
+    if (dontShowSendWarning && typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEY_SEND_WARNING_DISMISSED, "true");
     }
 
     setSendingEmail(true);
@@ -1490,11 +1528,15 @@ export default function Home() {
                                     activeConversationId === conv.id ? "text-primary-foreground" : ""
                                   }`}>
                                     {conv.name}
-                                    {sendingConversationId === conv.id && sendingProgress ? (
-                                      <span title={`Sending (${sendingProgress.sent} out of ${sendingProgress.total})`}>
-                                        <Send className="h-3 w-3 animate-pulse" />
-                                      </span>
-                                    ) : null}
+                                  {sendingConversationId === conv.id && sendingProgress ? (
+                                    <span 
+                                      className="flex items-center gap-1 cursor-help"
+                                      title={`Sending (${sendingProgress.sent} out of ${sendingProgress.total})`}
+                                    >
+                                      <Send className="h-3 w-3 animate-pulse" />
+                                      <span className="text-xs animate-pulse">...</span>
+                                    </span>
+                                  ) : null}
                                   </div>
                                   <div className={`text-xs truncate ${
                                     activeConversationId === conv.id ? "text-primary-foreground/80" : "text-muted-foreground"
@@ -1564,8 +1606,12 @@ export default function Home() {
                                 }`}>
                                   {conv.name}
                                   {sendingConversationId === conv.id && sendingProgress ? (
-                                    <span title={`Sending (${sendingProgress.sent} out of ${sendingProgress.total})`}>
+                                    <span 
+                                      className="flex items-center gap-1 cursor-help"
+                                      title={`Sending (${sendingProgress.sent} out of ${sendingProgress.total})`}
+                                    >
                                       <Send className="h-3 w-3 animate-pulse" />
+                                      <span className="text-xs animate-pulse">...</span>
                                     </span>
                                   ) : null}
                                 </div>
@@ -1997,7 +2043,7 @@ export default function Home() {
                                       console.log("Generate/Regenerate button clicked");
                                       handleGenerateFullConversation();
                                     }}
-                                    disabled={loading || sendingEmail || !conv.selectedAccount || conv.otherAccounts.length === 0}
+                                    disabled={loading || (sendingConversationId === conv.id && sendingEmail) || !conv.selectedAccount || conv.otherAccounts.length === 0}
                                     className="w-full"
                                     type="button"
                                   >
@@ -2824,6 +2870,48 @@ export default function Home() {
               type="button"
             >
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Warning Dialog */}
+      <Dialog open={sendWarningDialogOpen} onOpenChange={setSendWarningDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Warning: Messages Cannot Be Edited While Sending</DialogTitle>
+            <DialogDescription>
+              Once you start sending messages, you won't be able to edit them until the sending process is complete. 
+              Make sure all messages are correct before proceeding.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="dontShowSendWarning"
+                checked={dontShowSendWarning}
+                onCheckedChange={(checked) => setDontShowSendWarning(checked === true)}
+              />
+              <Label htmlFor="dontShowSendWarning" className="text-sm font-normal cursor-pointer">
+                Don't show this warning again
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setSendWarningDialogOpen(false);
+              setPendingSendAction(null);
+              setDontShowSendWarning(false);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={() => {
+              if (pendingSendAction) {
+                pendingSendAction();
+                setPendingSendAction(null);
+              }
+            }} type="button">
+              Continue Sending
             </Button>
           </DialogFooter>
         </DialogContent>
